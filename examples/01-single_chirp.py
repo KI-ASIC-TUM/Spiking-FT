@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""
+Run OS-CFAR over test dataset
+"""
+# Standard libraries
+import matplotlib.pyplot as plt
+import numpy as np
+# Local libraries
+import pyrads.algms.fft
+import pyrads.pipeline
+import sft.encoder
+try:
+    import sft.s_dft
+except ModuleNotFoundError:
+    pass
+
+
+def main(frame_n=0, chirp_n=0, timesteps=100, plot=False, spinnaker=False):
+    raw_data = np.load("data/sample_chirp.npy")
+
+    fft_shape = None
+    fft_params = {
+        "n_dims": 1,
+        "type": "range",
+        "out_format": "modulus",
+        "normalize": True,
+        "off_bins": 1,
+    }
+
+    if spinnaker:
+        n_plots = 3
+        encoder_params = {
+            "t_min": 0,
+            "t_max": timesteps,
+            "x_min": 0,
+            "x_max": 0.25,
+        }
+        sft_params = {
+            "n_dims": 1,
+            "timesteps": timesteps
+        }
+        encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
+        sft = sft.s_dft.SDFT(encoder.out_data_shape, **sft_params)
+
+        spinn_pipeline = pyrads.pipeline.Pipeline([encoder, sft])
+        spinn_pipeline(raw_data)
+        sft_out = spinn_pipeline.output[-1]
+        np.save("spinn_out.npy", sft_out)
+    else:
+        n_plots = 2
+
+    fft_alg = pyrads.algms.fft.FFT(
+        fft_shape,
+        **fft_params
+    )
+    std_pipeline = pyrads.pipeline.Pipeline([fft_alg])
+    std_pipeline(raw_data)
+    fft_out = std_pipeline.output[-1]
+    np.save("std_out.npy", fft_out)
+
+    fft_data = fft_out[0, 0, 0, 0, :]
+    fig, axs = plt.subplots(n_plots, figsize=(10,6))
+    axs[0].plot(fft_data)
+    axs[1].plot(fft_data)
+    if spinnaker:
+        axs[2].plot(sft_out[0, 0, 0, 0, :])
+    fig.savefig("out_fig.eps")
+    if plot:
+        plt.show()
+    return
+
+
+if __name__ == "__main__":
+    main()
