@@ -15,10 +15,10 @@ except ModuleNotFoundError:
     pass
 
 
-def main(frame_n=0, chirp_n=0, timesteps=100, plot=False, spinnaker=False):
+def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=False):
     raw_data = np.load("data/sample_chirp.npy")
 
-    fft_shape = None
+    fft_shape = raw_data.shape
     fft_params = {
         "n_dims": 1,
         "type": "range",
@@ -28,7 +28,7 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=False, spinnaker=False):
     }
 
     if spinnaker:
-        n_plots = 3
+        n_plots = 2
         encoder_params = {
             "t_min": 0,
             "t_max": timesteps,
@@ -47,7 +47,7 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=False, spinnaker=False):
         sft_out = spinn_pipeline.output[-1]
         np.save("spinn_out.npy", sft_out)
     else:
-        n_plots = 2
+        n_plots = 1
 
     fft_alg = pyrads.algms.fft.FFT(
         fft_shape,
@@ -60,10 +60,11 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=False, spinnaker=False):
 
     fft_data = fft_out[0, 0, 0, 0, :]
     fig, axs = plt.subplots(n_plots, figsize=(10,6))
-    axs[0].plot(fft_data)
-    axs[1].plot(fft_data)
-    if spinnaker:
-        axs[2].plot(sft_out[0, 0, 0, 0, :])
+    if not spinnaker:
+        axs.plot(fft_data)
+    else:
+        axs[0].plot(fft_data)
+        axs[1].plot(sft_out[0, 0, 0, 0, :])
     fig.savefig("out_fig.eps")
     if plot:
         plt.show()
