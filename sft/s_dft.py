@@ -47,7 +47,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         self.out_data_shape = self.in_data_shape[:-1]
         self.out_data_shape += (int(self.in_data_shape[-1]/2), )
-        self.out_data_shape[-2] += (2, )
+        self.out_data_shape += (2, )
 
 
     def init_snn(self):
@@ -63,11 +63,17 @@ class SDFT(pyrads.algorithm.Algorithm):
             params={},
             name="in",
         )
-        self.out_pop = snn.Population(
-            self.out_data_shape[-1],
+        self.out_pop_re = snn.Population(
+            self.out_data_shape[-2],
             neuron_model="lif_no_delay",
             params=self.neuron_params,
-            name="out",
+            name="out_re",
+        )
+        self.out_pop_im = snn.Population(
+            self.out_data_shape[-2],
+            neuron_model="lif_no_delay",
+            params=self.neuron_params,
+            name="out_im",
         )
         return
 
@@ -76,16 +82,16 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         Create the synaptic connections between populations
         """
-        cut_cell_connections = self.get_cut_cell_connections()
-        self.cut_proj = snn.Projection(
-            pre=self.cut_cell_pop,
-            post=self.out_pop,
-            connections=cut_cell_connections
-        )
         connections = self.get_connections()
         self.proj = snn.Projection(
             pre=self.in_pop,
-            post=self.out_pop,
+            post=self.out_pop_re,
+            connections=connections
+        )
+
+        self.proj = snn.Projection(
+            pre=self.in_pop,
+            post=self.out_pop_im,
             connections=connections
         )
         return
@@ -93,17 +99,12 @@ class SDFT(pyrads.algorithm.Algorithm):
     
     def get_connections(self):
         """
-        Define the synaptic connections between cut and out cells
-
-        Each output neuron is connected on a 1-to-1 fashing with the CUT
-        cells. The synaptic strength is defined by the ordered "k",
-        i.e., if k neighbour spikes arrive before the CUT spike, the
-        output will be zero.
+        Define the synaptic connections between in and out neurons
         """
         connections = []
-        for idx in range(self.out_data_shape[-1]):
-            pass
-            # connections.append([idx, idx, self.ordered_k, 0])
+        for idx_in in range(self.in_data_shape[-1]):
+            for idx_out in range(self.out_data_shape[-2]):
+                connections.append(idx_in, idx_out, 1, 0)
         return connections
 
     
@@ -111,7 +112,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         Assign the input spike times to the spike populations
         """
-        for idx in range(self.in_data_shape[-2]):
+        for idx in range(self.in_data_shape[-1]):
             self.in_pop.params[idx] = [int(spike_times[..., idx, 0])]
         return
 
