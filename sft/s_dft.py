@@ -29,14 +29,17 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.timesteps = kwargs.get("timesteps", 100)
         # SNN population variables
         self.in_pop = None
-        self.out_pop = None
-        self.proj = None
+        self.out_pop_re = None
+        self.out_pop_im = None
+        self.proj_re = None
+        self.proj_im = None
         # Initialize SNN and its connections
         self.init_snn()
         self.create_projections()
         # Create network and add populations to it
         self.net = snn.Network("my network")
-        self.net.add(self.in_pop, self.out_pop, self.proj)
+        self.net.add(self.in_pop, self.out_pop_re, self.proj_re)
+        self.net.add(self.in_pop, self.out_pop_im, self.proj_im)
         # Instantiate hardware
         self.hw = hardware.FPGA_Rev2()
 
@@ -83,13 +86,13 @@ class SDFT(pyrads.algorithm.Algorithm):
         Create the synaptic connections between populations
         """
         connections = self.get_connections()
-        self.proj = snn.Projection(
+        self.proj_re = snn.Projection(
             pre=self.in_pop,
             post=self.out_pop_re,
             connections=connections
         )
 
-        self.proj = snn.Projection(
+        self.proj_im = snn.Projection(
             pre=self.in_pop,
             post=self.out_pop_im,
             connections=connections
@@ -104,7 +107,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         connections = []
         for idx_in in range(self.in_data_shape[-1]):
             for idx_out in range(self.out_data_shape[-2]):
-                connections.append(idx_in, idx_out, 1, 0)
+                connections.append([idx_in, idx_out, 1, 0])
         return connections
 
     
