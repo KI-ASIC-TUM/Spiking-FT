@@ -39,7 +39,7 @@ class Encoder(pyrads.algorithm.Algorithm):
         """
         The encoder does not alter the data dimensionality
         """
-        self.out_data_shape = self.in_data_shape + (2,)
+        self.out_data_shape = self.in_data_shape
 
 
     def encode(self, values):

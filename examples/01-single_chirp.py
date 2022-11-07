@@ -9,16 +9,19 @@ import numpy as np
 import pyrads.algms.fft
 import pyrads.pipeline
 import sft.encoder
+import sft.preproc_pipeline
 try:
     import sft.s_dft
 except ModuleNotFoundError:
     pass
 
 
-def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=False):
+def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=True):
     raw_data = np.load("data/sample_chirp.npy")
 
     fft_shape = raw_data.shape
+    pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
+
     fft_params = {
         "n_dims": 1,
         "type": "range",
@@ -32,20 +35,20 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=False):
         encoder_params = {
             "t_min": 0,
             "t_max": timesteps,
-            "x_min": 0,
-            "x_max": 0.25,
+            "x_min": -1.0,
+            "x_max": 1.0,
         }
         sft_params = {
             "n_dims": 1,
             "timesteps": timesteps
         }
         encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
-        sft = sft.s_dft.SDFT(encoder.out_data_shape, **sft_params)
+        s_dft = sft.s_dft.SDFT(encoder.out_data_shape, **sft_params)
 
-        spinn_pipeline = pyrads.pipeline.Pipeline([encoder, sft])
+        spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft])
         spinn_pipeline(raw_data)
-        sft_out = spinn_pipeline.output[-1]
-        np.save("spinn_out.npy", sft_out)
+        s_dft_out = spinn_pipeline.output[-1]
+        np.save("spinn_out.npy", s_dft_out)
     else:
         n_plots = 1
 
@@ -53,7 +56,7 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=False):
         fft_shape,
         **fft_params
     )
-    std_pipeline = pyrads.pipeline.Pipeline([fft_alg])
+    std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg])
     std_pipeline(raw_data)
     fft_out = std_pipeline.output[-1]
     np.save("std_out.npy", fft_out)
@@ -64,7 +67,7 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=False):
         axs.plot(fft_data)
     else:
         axs[0].plot(fft_data)
-        axs[1].plot(sft_out[0, 0, 0, 0, :])
+        axs[1].plot(s_dft_out[0, 0, 0, 0, :])
     fig.savefig("out_fig.eps")
     if plot:
         plt.show()

@@ -43,25 +43,25 @@ class SDFT(pyrads.algorithm.Algorithm):
 
     def calculate_out_shape(self):
         """
-        The encoder does not alter the data dimensionality
+        Split in imag and real components. Only half spectrum is useful
         """
-        pass
-        # self.out_data_shape = self.in_data_shape[:-1]
+        self.out_data_shape = self.in_data_shape[:-1]
+        self.out_data_shape += (int(self.in_data_shape[-1]/2), )
+        self.out_data_shape[-2] += (2, )
 
 
     def init_snn(self):
         """
         Initialize the SNN populations
 
-        The output of the OS-CFAR is represented by the out_pop.
-        The input is split in between the population representing the
-        "cells under test" (CUT), and the neighbour cells.
+        The output of the OS-DFT is represented by the out_pop, and the
+        input is represented by in_pop.
         """
         self.in_pop = snn.Population(
-            self.in_data_shape[-2],
+            self.in_data_shape[-1],
             neuron_model="spike_list",
             params={},
-            name="in"
+            name="in",
         )
         self.out_pop = snn.Population(
             self.out_data_shape[-1],
