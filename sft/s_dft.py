@@ -116,23 +116,25 @@ class SDFT(pyrads.algorithm.Algorithm):
         Assign the input spike times to the spike populations
         """
         for idx in range(self.in_data_shape[-1]):
-            self.in_pop.params[idx] = [int(spike_times[..., idx, 0])]
+            self.in_pop.params[idx] = [int(spike_times[..., idx])]
         return
 
 
-    def format_output(self, spike_times):
+    def format_output(self, spike_times_re, spike_times_im):
         """
         Tranform spike dictionary into output data array
         """
-        spike_list = list(spike_times.values())
-        filled_list = [0 if not len(v) else 1 for v in spike_list]
-        output = np.array(filled_list).reshape(self.out_data_shape)
+        spike_list_re = list(spike_times_re.values())
+        spike_list_im = list(spike_times_im.values())
+        spike_list = np.stack((spike_list_re, spike_list_im))
+        output = np.array(spike_list).reshape(self.out_data_shape)
         return output
 
 
     def _run(self, in_data):
         self.assign_input_spikes(in_data)
         self.hw.run(self.net, self.timesteps)
-        spike_times = self.out_pop.get_spikes()
-        output = self.format_output(spike_times)
+        spike_times_re = self.out_pop_re.get_spikes()
+        spike_times_im = self.out_pop_im.get_spikes()
+        output = self.format_output(spike_times_re, spike_times_im)
         return output
