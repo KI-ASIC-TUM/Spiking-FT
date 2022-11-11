@@ -30,6 +30,7 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=True):
         "out_format": "modulus",
         "normalize": True,
         "off_bins": 1,
+        "out_type": "voltage",
     }
 
     if spinnaker:

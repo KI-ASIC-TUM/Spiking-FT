@@ -29,6 +29,11 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.n_dims = kwargs.get("n_dims")
         # Load simulations parameters
         self.timesteps = kwargs.get("timesteps", 100)
+        self.out_type = kwargs.get("out_type", "spike")
+        if self.out_type not in ["spike", "voltage"]:
+            raise ValueError(
+                    "{} not a valid value for 'out_type'".format(self.out_type)
+            )
         # SNN population variables
         self.in_pop = None
         self.out_pop_re = None
@@ -42,7 +47,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.init_snn()
         self.create_projections()
         # Create network and add populations to it
-        self.net = snn.Network("my network")
+        self.net = snn.Network(self.NAME)
         self.net.add(self.in_pop, self.out_pop_re, self.proj_re)
         self.net.add(self.in_pop, self.out_pop_im, self.proj_im)
         # Instantiate hardware
@@ -146,27 +151,41 @@ class SDFT(pyrads.algorithm.Algorithm):
         return
 
 
-    def format_output(self, spike_times_re, spike_times_im):
+    def format_output(self, output_re, output_im):
         """
-        Tranform spike dictionary into output data array
+        Tranform output dictionary into output data array
         """
-        spike_list_re = list(spike_times_re.values())
-        spike_list_im = list(spike_times_im.values())
-        filled_list_re = np.array([
-                self.timesteps if not len(v) else v[0] for v in spike_list_re
-        ])
-        filled_list_im = np.array([
-                self.timesteps if not len(v) else v[0] for v in spike_list_im
-        ])
+        # Parse the output dictionaries into lists
+        out_list_re = list(output_re.values())
+        out_list_im = list(output_im.values())
+        # Turn multiple-output lists into single-value array
+        if self.out_type == "spike":
+            filled_list_re = np.array([
+                    self.timesteps if not len(v) else v[0] for v in out_list_re
+            ])
+            filled_list_im = np.array([
+                    self.timesteps if not len(v) else v[0] for v in out_list_im
+            ])
+        elif self.out_type == "voltage":
+            filled_list_re = np.array([v[-1] for v in out_list_re])
+            filled_list_im = np.array([v[-1] for v in out_list_im])
+        # Merge real and imaginary outputs into single array
         spike_list = np.stack((filled_list_re, filled_list_im))
         output = np.array(spike_list).reshape(self.out_data_shape)
         return output
 
 
     def _run(self, in_data):
+        # Write spike times into spike input population
         self.assign_input_spikes(in_data)
+        # Run SNN on neuromorphic chip
         self.hw.run(self.net, self.timesteps)
-        spike_times_re = self.out_pop_re.get_spikes()
-        spike_times_im = self.out_pop_im.get_spikes()
-        output = self.format_output(spike_times_re, spike_times_im)
+        # Fetch  and format SNN output
+        if self.out_type == "spike":
+            output_re = self.out_pop_re.get_spikes()
+            output_im = self.out_pop_im.get_spikes()
+        elif self.out_type == "voltage":
+            output_re = self.out_pop_re.get_voltages()
+            output_im = self.out_pop_im.get_voltages()
+        output = self.format_output(output_re, output_im)
         return output
