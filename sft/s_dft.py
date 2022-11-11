@@ -105,17 +105,17 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         Create the synaptic connections between populations
         """
-        connections = self.get_connections()
+        connections_re, connections_im = self.get_connections()
         self.proj_re = snn.Projection(
             pre=self.in_pop,
             post=self.out_pop_re,
-            connections=connections
+            connections=connections_re
         )
 
         self.proj_im = snn.Projection(
             pre=self.in_pop,
             post=self.out_pop_im,
-            connections=connections
+            connections=connections_im
         )
         return
 
@@ -128,8 +128,12 @@ class SDFT(pyrads.algorithm.Algorithm):
         connections_im = []
         for idx_in in range(self.in_data_shape[-1]):
             for idx_out in range(self.out_data_shape[-2]):
-                connections_re.append([idx_in, idx_out, self.weights_re[idx_out], 0])
-                connections_im.append([idx_in, idx_out, self.weights_im[idx_out], 0])
+                connections_re.append(
+                        [idx_in, idx_out, self.weights_re[idx_out, idx_in], 0]
+                )
+                connections_im.append(
+                        [idx_in, idx_out, self.weights_im[idx_out, idx_in], 0]
+                )
         return (connections_re, connections_im)
 
     
