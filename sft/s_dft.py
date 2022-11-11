@@ -25,7 +25,7 @@ class SDFT(pyrads.algorithm.Algorithm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Load os-cfar parameters
+        # Load DFT parameters
         self.n_dims = kwargs.get("n_dims")
         # Load simulations parameters
         self.timesteps = kwargs.get("timesteps", 100)
@@ -33,9 +33,12 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.in_pop = None
         self.out_pop_re = None
         self.out_pop_im = None
+        self.weights_re = None
+        self.weights_im = None
         self.proj_re = None
         self.proj_im = None
         # Initialize SNN and its connections
+        self.calculate_weights()
         self.init_snn()
         self.create_projections()
         # Create network and add populations to it
@@ -53,6 +56,21 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.out_data_shape = self.in_data_shape[:-1]
         self.out_data_shape += (int(self.in_data_shape[-1]/2), )
         self.out_data_shape += (2, )
+
+
+    def calculate_weights(self):
+        """
+        Calculate the weights based on the DFT equation
+        """
+        c = 2 * np.pi/self.in_data_shape[-1]
+        n = np.arange(self.in_data_shape[-1]).reshape(self.in_data_shape[-1], 1)
+        k = np.arange(self.in_data_shape[-1]).reshape(1, self.in_data_shape[-1])
+        trig_factors = np.dot(n, k) * c
+        real_weights = np.cos(trig_factors)[:self.out_data_shape[-2]]
+        imag_weights = -np.sin(trig_factors)[:self.out_data_shape[-2]]
+        # Normalize for the allowed range in SpiNNaker
+        self.weights_re = np.ceil(real_weights*127)
+        self.weights_im = np.ceil(imag_weights*127)
 
 
     def init_snn(self):
@@ -106,11 +124,13 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         Define the synaptic connections between in and out neurons
         """
-        connections = []
+        connections_re = []
+        connections_im = []
         for idx_in in range(self.in_data_shape[-1]):
             for idx_out in range(self.out_data_shape[-2]):
-                connections.append([idx_in, idx_out, 1, 0])
-        return connections
+                connections_re.append([idx_in, idx_out, self.weights_re[idx_out], 0])
+                connections_im.append([idx_in, idx_out, self.weights_im[idx_out], 0])
+        return (connections_re, connections_im)
 
     
     def assign_input_spikes(self, spike_times):
