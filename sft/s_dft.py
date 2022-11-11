@@ -14,9 +14,11 @@ class SDFT(pyrads.algorithm.Algorithm):
     """
     NAME = "S-DFT"
     neuron_params = {
-        "threshold":1.,
-        "alpha_decay":1.0,
-        "i_offset":0.0,
+        "threshold": 1.0,
+        "alpha_decay": 1.0,
+        "exc_decay": 1.0,
+        "inh_decay": 1.0,
+        "i_offset": 0.0,
         "v_reset": 0.0,
         "reset": 'reset_to_v_reset',
     }
@@ -68,13 +70,13 @@ class SDFT(pyrads.algorithm.Algorithm):
         )
         self.out_pop_re = snn.Population(
             self.out_data_shape[-2],
-            neuron_model="lif_no_delay",
+            neuron_model="lif_curr_exp_no_delay",
             params=self.neuron_params,
             name="out_re",
         )
         self.out_pop_im = snn.Population(
             self.out_data_shape[-2],
-            neuron_model="lif_no_delay",
+            neuron_model="lif_curr_exp_no_delay",
             params=self.neuron_params,
             name="out_im",
         )
