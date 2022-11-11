@@ -128,7 +128,13 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         spike_list_re = list(spike_times_re.values())
         spike_list_im = list(spike_times_im.values())
-        spike_list = np.stack((spike_list_re, spike_list_im))
+        filled_list_re = np.array([
+                self.timesteps if not len(v) else v[0] for v in spike_list_re
+        ])
+        filled_list_im = np.array([
+                self.timesteps if not len(v) else v[0] for v in spike_list_im
+        ])
+        spike_list = np.stack((filled_list_re, filled_list_im))
         output = np.array(spike_list).reshape(self.out_data_shape)
         return output
 

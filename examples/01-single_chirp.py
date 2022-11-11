@@ -18,6 +18,8 @@ except ModuleNotFoundError:
 
 def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=True):
     raw_data = np.load("data/sample_chirp.npy")
+    # Downsample data so it fits in the neuromorphic chip
+    raw_data = raw_data[...,::4]
 
     fft_shape = raw_data.shape
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
