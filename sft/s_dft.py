@@ -74,8 +74,8 @@ class SDFT(pyrads.algorithm.Algorithm):
         real_weights = np.cos(trig_factors)[:self.out_data_shape[-2]]
         imag_weights = -np.sin(trig_factors)[:self.out_data_shape[-2]]
         # Normalize for the allowed range in SpiNNaker
-        self.weights_re = np.ceil(real_weights*127)
-        self.weights_im = np.ceil(imag_weights*127)
+        self.weights_re = real_weights*127
+        self.weights_im = imag_weights*127
 
 
     def init_snn(self):
