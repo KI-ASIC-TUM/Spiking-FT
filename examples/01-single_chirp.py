@@ -16,7 +16,12 @@ except ModuleNotFoundError:
     pass
 
 
-def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=True):
+def main(
+        timesteps=100,
+        plot=True,
+        spinnaker=True,
+        out_type="voltage"
+    ):
     raw_data = np.load("data/sample_chirp.npy")
     # Downsample data so it fits in the neuromorphic chip
     raw_data = raw_data[...,::4]
@@ -30,7 +35,7 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=True):
         "out_format": "modulus",
         "normalize": True,
         "off_bins": 1,
-        "out_type": "voltage",
+        "out_type": out_type,
     }
 
     if spinnaker:
@@ -51,6 +56,8 @@ def main(frame_n=0, chirp_n=0, timesteps=100, plot=True, spinnaker=True):
         spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft])
         spinn_pipeline(raw_data)
         s_dft_out = spinn_pipeline.output[-1]
+        if out_type=="voltage":
+            s_dft_out = np.sqrt(s_dft_out[..., 0]**2 + s_dft_out[..., 1]**2)
         np.save("spinn_out.npy", s_dft_out)
     else:
         n_plots = 1
