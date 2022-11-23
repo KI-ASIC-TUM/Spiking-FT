@@ -14,7 +14,7 @@ class SDFT(pyrads.algorithm.Algorithm):
     """
     NAME = "S-DFT"
     neuron_params = {
-        "threshold": 1.0,
+        "threshold": 10000.0,
         "alpha_decay": 1.0,
         "exc_decay": 1.0,
         "inh_decay": 1.0,

@@ -35,7 +35,6 @@ def main(
         "out_format": "modulus",
         "normalize": True,
         "off_bins": 1,
-        "out_type": out_type,
     }
 
     if spinnaker:
@@ -48,7 +47,8 @@ def main(
         }
         sft_params = {
             "n_dims": 1,
-            "timesteps": timesteps
+            "timesteps": timesteps,
+            "out_type": out_type,
         }
         encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
         s_dft = sft.s_dft.SDFT(encoder.out_data_shape, **sft_params)
