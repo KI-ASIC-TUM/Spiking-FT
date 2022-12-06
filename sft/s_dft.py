@@ -96,12 +96,14 @@ class SDFT(pyrads.algorithm.Algorithm):
             neuron_model="lif_curr_exp_no_delay",
             params=self.neuron_params,
             name="out_re",
+            record=['spikes','v']
         )
         self.out_pop_im = snn.Population(
             self.out_data_shape[-2],
             neuron_model="lif_curr_exp_no_delay",
             params=self.neuron_params,
             name="out_im",
+            record=['spikes','v']
         )
         return
 
