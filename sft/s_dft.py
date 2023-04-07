@@ -5,7 +5,10 @@ Class for the spiking OS-CFAR algorithm
 import numpy as np
 # Local libraries
 import pyrads.algorithm
-from spinnaker2 import snn, hardware
+try:
+    from spinnaker2 import snn, hardware
+except ModuleNotFoundError:
+    pass
 
 
 class SDFT(pyrads.algorithm.Algorithm):

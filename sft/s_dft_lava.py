@@ -4,6 +4,9 @@ Class for the spiking DFT algorithm in Lava
 # Standard libraries
 import numpy as np
 # 3rd party libraries
+from lava.magma.compiler.compiler import Compiler
+from lava.magma.core.process.message_interface_enum import ActorType
+from lava.magma.runtime.runtime import Runtime
 from lava.proc.dense.process import Dense
 from lava.magma.core.run_configs import Loihi1SimCfg
 from lava.magma.core.run_conditions import RunSteps
@@ -36,7 +39,7 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         self.weights_im = None
         # Initialize SNN and its connections
         self.calculate_weights()
-        self.init_snn()
+        # self.init_snn()
 
 
     def calculate_out_shape(self):
@@ -61,14 +64,13 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         # Normalize for the allowed range in SpiNNaker
         self.weights_re = real_weights*127
         self.weights_im = imag_weights*127
-        import pdb; pdb.set_trace()
-        self.weights = np.stack((self.weights_re, self.weights_im))
+        self.weights = np.vstack((self.weights_re, self.weights_im))
 
-    def init_snn(self):
+    def init_snn(self, input_val):
         # Input spike generation population
         self.input_pop = sft.spike_gen.TemporalSpikeGenerator(
-            shape=self.in_data_shape,
-            input_val=None,
+            shape=(self.in_data_shape[-1],),
+            input_val=input_val,
             vth=1.0,
             t_max=self.timesteps,
             x_max=1.0,
@@ -79,9 +81,9 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         vth = self.neuron_params["threshold"]
         iext = vth / self.timesteps
         self.tcbs_pop = sft.tcbs_lava.TCBS(
-            shape=self.out_data_shape,
+            shape=(self.in_data_shape[-1],),
             start_time=1,
-            phase_time=self.timesteps2,
+            phase_time=self.timesteps,
             total_time=self.timesteps*2,
             vth=self.neuron_params["threshold"],
             Iext=iext,
@@ -91,18 +93,25 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         )
         # Dense layer for connecting input spikes with S-FT layer
         self.dense = Dense(shape=self.weights.shape, weights=self.weights)
-        self.input_pop.spike_out.connect(self.dense.s_in)
+        self.input_pop.spikes_out.connect(self.dense.s_in)
         self.dense.a_out.connect(self.tcbs_pop.spikes_in)
 
 
     def _run(self, in_data):
-        # Run SNN on neuromorphic chip
-        self.input_pop.input_val.set(in_data)
-        self.input_pop.run(
-            condition=RunSteps(num_steps=self.timesteps*2),
-            run_cfg=Loihi1SimCfg()
-        )
+        self.init_snn(in_data[-1])
+        # Compile network
+        compiler = Compiler()
+        executable = compiler.compile(self.input_pop, run_cfg=Loihi1SimCfg())
+        # Create a runtime and add spike times
+        mp = ActorType.MultiProcessing
+        runtime = Runtime(exe=executable,
+                  message_infrastructure_type=mp)
+        runtime.initialize()
+        # self.input_pop.input_val.set(in_data[-1])
+        # Execute network
+        runtime.start(run_condition=RunSteps(num_steps=self.timesteps*2))
+        # Get output spikes and stop execution
         spike_times = self.tcbs_pop.spike_times.get()
-        self.input_pop.stop()
-        output = spike_times
+        runtime.stop()
+        output = spike_times.reshape(self.out_data_shape)
         return output
