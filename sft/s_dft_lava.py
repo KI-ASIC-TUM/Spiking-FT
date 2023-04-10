@@ -10,7 +10,7 @@ from lava.magma.runtime.runtime import Runtime
 from lava.proc.dense.process import Dense
 from lava.magma.core.run_configs import Loihi1SimCfg
 from lava.magma.core.run_conditions import RunSteps
-
+from lava.proc.monitor.process import Monitor
 # Local libraries
 import pyrads.algorithm
 import sft.spike_gen
@@ -23,7 +23,9 @@ class SDFTLava(pyrads.algorithm.Algorithm):
     """
     NAME = "S-DFT-Lava"
     neuron_params = {
-        "threshold": 100.0,
+        "x_max": 1.0,
+        "x_min": -1.0,
+        "alpha": 0.5
     }
 
     def __init__(self, *args, **kwargs):
@@ -32,14 +34,18 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         self.n_dims = kwargs.get("n_dims")
         # Load simulations parameters
         self.timesteps = kwargs.get("timesteps", 100)
+        self.debug = kwargs.get("debug", False)
         # SNN population variables
         self.input_pop = None
         self.tcbs_pop = None
         self.weights_re = None
         self.weights_im = None
-        # Initialize SNN and its connections
+        # Calculate SNN paramters
         self.calculate_weights()
-        # self.init_snn()
+        alpha = self.neuron_params["alpha"]
+        self.vth = alpha*0.25*self.weights[0].sum()*self.timesteps
+        if self.debug:
+            self.v_monitor = Monitor()
 
 
     def calculate_out_shape(self):
@@ -61,10 +67,7 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         trig_factors = np.dot(n, k) * c
         real_weights = np.cos(trig_factors)[:self.out_data_shape[-2]]
         imag_weights = -np.sin(trig_factors)[:self.out_data_shape[-2]]
-        # Normalize for the allowed range in SpiNNaker
-        self.weights_re = real_weights*127
-        self.weights_im = imag_weights*127
-        self.weights = np.vstack((self.weights_re, self.weights_im))
+        self.weights = np.vstack((real_weights, imag_weights))
 
     def init_snn(self, input_val):
         # Input spike generation population
@@ -73,28 +76,32 @@ class SDFTLava(pyrads.algorithm.Algorithm):
             input_val=input_val,
             vth=1.0,
             t_max=self.timesteps,
-            x_max=1.0,
+            x_max=self.neuron_params["x_max"],
+            x_min=self.neuron_params["x_min"],
             ignore_zero=True,
-            debug=True
+            debug=self.debug
         )
         # S-FT neuron population
-        vth = self.neuron_params["threshold"]
-        iext = vth / self.timesteps
+        iext = 2 * self.vth / self.timesteps
         self.tcbs_pop = sft.tcbs_lava.TCBS(
             shape=(self.in_data_shape[-1],),
             start_time=1,
             phase_time=self.timesteps,
             total_time=self.timesteps*2,
-            vth=self.neuron_params["threshold"],
+            vth=self.vth,
             Iext=iext,
             bias=0,
             max_spikes=0,
-            debug=True
+            debug=self.debug,
+            name="TCBS"
         )
         # Dense layer for connecting input spikes with S-FT layer
         self.dense = Dense(shape=self.weights.shape, weights=self.weights)
         self.input_pop.spikes_out.connect(self.dense.s_in)
         self.dense.a_out.connect(self.tcbs_pop.spikes_in)
+        if self.debug:
+            # Set up voltage probe
+            self.v_monitor.probe(self.tcbs_pop.v, self.timesteps*2)
 
 
     def _run(self, in_data):
@@ -112,6 +119,9 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         runtime.start(run_condition=RunSteps(num_steps=self.timesteps*2))
         # Get output spikes and stop execution
         spike_times = self.tcbs_pop.spike_times.get()
+        if self.debug:
+            self.voltages = self.v_monitor.get_data()["TCBS"]["v"]
         runtime.stop()
-        output = spike_times.reshape(self.out_data_shape)
+        output = np.stack((spike_times[:64], spike_times[64:])).transpose()
+        output = output.reshape(self.out_data_shape)
         return output

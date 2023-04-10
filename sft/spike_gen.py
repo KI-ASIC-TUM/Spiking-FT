@@ -33,6 +33,7 @@ class TemporalSpikeGenerator(AbstractProcess):
         shape = (kwargs["shape"])
         t_max = kwargs["t_max"]
         x_max = kwargs["x_max"]
+        x_min = kwargs["x_min"]
         t_min = 1 # Determined by Lava dynamics
         v_th = kwargs["vth"]
         ignore_zero = kwargs.pop("ignore_zero", False) # No spikes for 0s
@@ -45,11 +46,13 @@ class TemporalSpikeGenerator(AbstractProcess):
         self.vth = Var(shape=(1,), init=v_th)
         self.spike_times = Var(shape=shape, init=np.zeros(shape).astype(np.int32))
         # Encoding parameters
+        self.t_min = Var(shape=(1,), init=t_min)
         self.t_max = Var(shape=(1,), init=t_max)
         self.x_max = Var(shape=(1,), init=x_max)
+        self.x_min = Var(shape=(1,), init=x_min)
         if ignore_zero:
             t_max += 1
-        k1 = (t_max-t_min) / x_max
+        k1 = (t_max-t_min) / (x_max-x_min)
         self.k1 = Var(shape=(1,), init=k1)
         # Auxiliary variables
         self.debug = Var(shape=(1,), init=kwargs.pop("debug", False))
@@ -67,8 +70,10 @@ class TemporalSpikeGeneratorModel(PyLoihiProcessModel):
     vth: int = LavaPyType(float, float, precision=32)
     spike_times: np.ndarray = LavaPyType(np.ndarray, int, precision=32)
     # Encoding parameters
+    t_min: int = LavaPyType(int, int, precision=32)
     t_max: int = LavaPyType(int, int, precision=32)
     x_max: float = LavaPyType(float, float, precision=32)
+    x_min: float = LavaPyType(float, float, precision=32)
     k1: float = LavaPyType(float, float, precision=32)
     # Auxiliary variables
     debug: bool = LavaPyType(bool, bool, precision=1)
@@ -80,7 +85,7 @@ class TemporalSpikeGeneratorModel(PyLoihiProcessModel):
         """
         Spiking phase: executed unconditionally at every time-step
         """
-        dv = 1 / (1 + self.k1*(self.x_max-self.input_val))
+        dv = self.vth / (self.t_min + self.k1*(self.x_max-self.input_val))
         self.v[:] = (self.v + dv) * (1-self.refractory)
         if self.debug:
             pass
