@@ -9,7 +9,7 @@ setup(
     author="Technical University of Munich. AIR",
     packages=find_packages(),
     install_requires=[
-        "numpy>=1.20",
+        "numpy>=1.19",
         "matplotlib>=3.1.2",
     ],
     include_package_data=True,

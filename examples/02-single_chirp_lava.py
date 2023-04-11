@@ -16,11 +16,13 @@ import sft.s_dft_lava
 def main(
         timesteps=100,
         plot=True,
+        downsample=False,
         out_type="voltage"
     ):
     raw_data = np.load("data/sample_chirp.npy")
-    # Downsample data so it fits in the neuromorphic chip
-    raw_data = raw_data[...,::4]
+    if downsample:
+        # Downsample data so it fits in the neuromorphic chip
+        raw_data = raw_data[...,::4]
 
     fft_shape = raw_data.shape
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
@@ -32,14 +34,7 @@ def main(
         "normalize": True,
         "off_bins": 1,
     }
-
     n_plots = 2
-    encoder_params = {
-        "t_min": 0,
-        "t_max": timesteps,
-        "x_min": -1.0,
-        "x_max": 1.0,
-    }
     sft_params = {
         "n_dims": 1,
         "timesteps": timesteps,

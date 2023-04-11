@@ -122,6 +122,7 @@ class SDFTLava(pyrads.algorithm.Algorithm):
         if self.debug:
             self.voltages = self.v_monitor.get_data()["TCBS"]["v"]
         runtime.stop()
-        output = np.stack((spike_times[:64], spike_times[64:])).transpose()
+        output = np.stack((spike_times[:self.out_data_shape[-2]],
+                           spike_times[self.out_data_shape[-2]:])).transpose()
         output = output.reshape(self.out_data_shape)
         return output
