@@ -17,13 +17,10 @@ class SDFT(pyrads.algorithm.Algorithm):
     """
     NAME = "S-DFT"
     neuron_params = {
-        "threshold": 10000.0,
-        "alpha_decay": 1.0,
-        "exc_decay": 1.0,
-        "inh_decay": 1.0,
-        "i_offset": 0.0,
-        "v_reset": 0.0,
-        "reset": 'reset_to_v_reset',
+        "threshold":20000., # high value so neurons don't spike
+        "i_offset":500.0,
+        "t_silent":50,
+
     }
 
     def __init__(self, *args, **kwargs):
@@ -45,6 +42,12 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.weights_im = None
         self.proj_re = None
         self.proj_im = None
+        # Charge-and-spike neuron parameters
+        v_th = kwargs.get("v_th", 20000)
+        self.neuron_params = {}
+        self.neuron_params["v_th"] = v_th
+        self.neuron_params["t_silent"] = self.timesteps // 2
+        self.neuron_params["i_offset"] = 2*v_th // self.timesteps
         # Initialize SNN and its connections
         self.calculate_weights()
         self.init_snn()
@@ -96,7 +99,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         )
         self.out_pop_re = snn.Population(
             self.out_data_shape[-2],
-            neuron_model="lif_curr_exp_no_delay",
+            neuron_model="charge_and_spike",
             params=self.neuron_params,
             name="out_re",
             record=['spikes','v']
@@ -105,7 +108,7 @@ class SDFT(pyrads.algorithm.Algorithm):
 
         self.out_pop_im = snn.Population(
             self.out_data_shape[-2],
-            neuron_model="lif_curr_exp_no_delay",
+            neuron_model="charge_and_spike",
             params=self.neuron_params,
             name="out_im",
             record=['spikes','v']

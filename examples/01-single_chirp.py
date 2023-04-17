@@ -11,7 +11,7 @@ import pyrads.pipeline
 import sft.encoder
 import sft.preproc_pipeline
 try:
-    import sft.s_dft
+    import sft.s_dft_spinnaker
 except ModuleNotFoundError:
     pass
 
@@ -51,7 +51,7 @@ def main(
             "out_type": out_type,
         }
         encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
-        s_dft = sft.s_dft.SDFT(encoder.out_data_shape, **sft_params)
+        s_dft = sft.s_dft_spinnaker.SDFT(encoder.out_data_shape, **sft_params)
 
         spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft])
         spinn_pipeline(raw_data)
