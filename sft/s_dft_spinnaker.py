@@ -57,7 +57,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.net.add(self.in_pop, self.out_pop_re, self.proj_re)
         self.net.add(self.in_pop, self.out_pop_im, self.proj_im)
         # Instantiate hardware
-        self.hw = hardware.FPGA_Rev2()
+        self.hw = hardware.SpiNNaker2Chip()
 
 
     def calculate_out_shape(self):
@@ -179,10 +179,10 @@ class SDFT(pyrads.algorithm.Algorithm):
                     self.timesteps if not len(v) else v[0] for v in out_list_im
             ])
         elif self.out_type == "voltage":
-            filled_list_re = np.array([v[-1] for v in out_list_re])
-            filled_list_im = np.array([v[-1] for v in out_list_im])
+            filled_list_re = np.array([v[self.neuron_params["t_silent"]] for v in out_list_re])
+            filled_list_im = np.array([v[self.neuron_params["t_silent"]] for v in out_list_im])
         # Merge real and imaginary outputs into single array
-        spike_list = np.stack((filled_list_re, filled_list_im))
+        spike_list = np.stack((filled_list_re, filled_list_im)).transpose()
         output = np.array(spike_list).reshape(self.out_data_shape)
         return output
 
