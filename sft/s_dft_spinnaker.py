@@ -45,7 +45,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         # Charge-and-spike neuron parameters
         v_th = kwargs.get("v_th", 20000)
         self.neuron_params = {}
-        self.neuron_params["v_th"] = v_th
+        self.neuron_params["threshold"] = v_th
         self.neuron_params["t_silent"] = self.timesteps // 2
         self.neuron_params["i_offset"] = 2*v_th // self.timesteps
         # Initialize SNN and its connections
