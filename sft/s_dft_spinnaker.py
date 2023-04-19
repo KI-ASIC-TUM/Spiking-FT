@@ -42,14 +42,15 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.weights_im = None
         self.proj_re = None
         self.proj_im = None
+        # Initialize SNN and its connections
+        self.calculate_weights()
+        alpha = 0.25
+        v_th = alpha*0.25*self.weights_re[0].sum()*self.timesteps
         # Charge-and-spike neuron parameters
-        v_th = kwargs.get("v_th", 20000)
         self.neuron_params = {}
         self.neuron_params["threshold"] = v_th
         self.neuron_params["t_silent"] = self.timesteps // 2
-        self.neuron_params["i_offset"] = 2*v_th // self.timesteps
-        # Initialize SNN and its connections
-        self.calculate_weights()
+        self.neuron_params["i_offset"] =2*v_th // (self.timesteps/2)
         self.init_snn()
         self.create_projections()
         # Create network and add populations to it
@@ -102,7 +103,7 @@ class SDFT(pyrads.algorithm.Algorithm):
             neuron_model="charge_and_spike",
             params=self.neuron_params,
             name="out_re",
-            record=['spikes','v']
+            record=['spikes']
         )
         self.out_pop_re.set_max_atoms_per_core(50)
 
@@ -111,7 +112,7 @@ class SDFT(pyrads.algorithm.Algorithm):
             neuron_model="charge_and_spike",
             params=self.neuron_params,
             name="out_im",
-            record=['spikes','v']
+            record=['spikes']
         )
         self.out_pop_im.set_max_atoms_per_core(50)
 
