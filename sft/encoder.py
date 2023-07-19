@@ -62,3 +62,24 @@ class Encoder(pyrads.algorithm.Algorithm):
     def _run(self, in_data):
         result = self.encode(in_data)
         return result
+    
+class Identity(pyrads.algorithm.Algorithm):
+    """
+    Parent class for radar algorithms
+    """
+    NAME = "Identity"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def calculate_out_shape(self):
+        """
+        The encoder does not alter the data dimensionality
+        """
+        self.out_data_shape = self.in_data_shape
+
+
+    def _run(self, in_data):
+        result = in_data
+        return result
