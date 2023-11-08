@@ -93,7 +93,6 @@ class SDFT(pyrads.algorithm.Algorithm):
             self.spikes += out_l1
             current_time = counter * self.time_step
             counter += 1
-
         # Spiking stage
         self.l1.bias = 2*self.neuron_params["threshold"] / self.timesteps
         causal_neurons = np.zeros_like(causal_neurons)
@@ -109,7 +108,11 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         Tranform output dictionary into output data array
         """
-        output = 1.5*self.timesteps - spikes.reshape(self.out_data_shape)
+        # All neurons that didn't spike are forced to spike in the last step,
+        # since the spike-time of 1 corresponds to the lowest possible value.
+        spikes_all = np.where(spikes == 0, 2*self.timesteps, spikes)
+        # Decode from TTFS spikes to input data format
+        output = 1.5*self.timesteps - spikes_all.reshape(self.out_data_shape)
         return output
 
 
@@ -157,7 +160,7 @@ class SpikingNeuralLayer():
         # Calculate separately the currents to the real and imaginary neurons
         z_real = np.dot(self.weights[0], input_spikes[0,0,0,0,:])
         z_imag = np.dot(self.weights[1], input_spikes[0,0,0,0,:])
-        z = np.hstack((z_real, z_imag))
+        z = np.vstack((z_real, z_imag)).transpose()
         # Add bias to the result and multiply by time_step
         z += self.bias
         z *= self.time_step

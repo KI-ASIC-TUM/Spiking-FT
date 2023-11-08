@@ -51,8 +51,6 @@ def main(
     spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft])
     spinn_pipeline(raw_data)
     s_dft_out = spinn_pipeline.output[-1]
-    if out_type=="spike":
-        s_dft_out = 0.75*timesteps - s_dft_out
     s_dft_out = np.sqrt(s_dft_out[..., 0]**2 + s_dft_out[..., 1]**2)
     np.save("spinn_out.npy", s_dft_out)
 
@@ -69,7 +67,9 @@ def main(
     fft_data = fft_out[0, 0, 0, 0, :]
     fig, axs = plt.subplots(n_plots, figsize=(10,6))
 
+    axs[0].set_title("FFT")
     axs[0].plot(fft_data)
+    axs[1].set_title("S-FT Numpy")
     axs[1].plot(s_dft_out[0, 0, 0, 0, :])
     fig.savefig("out_fig.eps")
     if plot:
