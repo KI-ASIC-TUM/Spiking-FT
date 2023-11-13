@@ -94,6 +94,7 @@ class SDFT(pyrads.algorithm.Algorithm):
             current_time = counter * self.time_step
             counter += 1
         # Spiking stage
+        self.l1.spiking = True
         self.l1.bias = 2*self.neuron_params["threshold"] / self.timesteps
         causal_neurons = np.zeros_like(causal_neurons)
         while counter < 2*self.timesteps:
@@ -144,6 +145,7 @@ class SpikingNeuralLayer():
         # Neuron properties
         self.bias = kwargs.get("bias", 0)
         self.v_threshold = kwargs.get("v_threshold", 0.05)
+        self.spiking = False
         # Neuron variables
         self.v_membrane = np.zeros(shape)
         self.spikes = np.zeros(shape)
@@ -176,6 +178,12 @@ class SpikingNeuralLayer():
         """
         self.v_membrane += z
         self.v_membrane *= (1-self.refactory)
+        if not self.spiking:
+            self.v_membrane = np.where(
+                (self.v_membrane>self.v_threshold),
+                self.v_threshold,
+                self.v_membrane
+            )
         return self.v_membrane
 
     def generate_spikes(self):
@@ -183,7 +191,8 @@ class SpikingNeuralLayer():
         Determine which neurons spike, based on membrane potential
         """
         # Generate a spike when the voltage is higher than the threshold
-        self.spikes = np.where((self.v_membrane>self.v_threshold), True, False)
+        if self.spiking:
+            self.spikes = np.where((self.v_membrane>self.v_threshold), True, False)
         # Activate the refactory period for the neurons that spike
         self.refactory += self.spikes
         return self.spikes

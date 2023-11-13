@@ -15,7 +15,7 @@ import sft.s_dft_numpy
 import sft.utils.metrics
 
 
-def run(raw_data, timesteps, out_type, title):
+def run(raw_data, timesteps, out_type, title, off_bins=4):
     fft_shape = raw_data.shape
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
 
@@ -24,7 +24,7 @@ def run(raw_data, timesteps, out_type, title):
         "type": "range",
         "out_format": "modulus",
         "normalize": True,
-        "off_bins": 4,
+        "off_bins": off_bins,
     }
 
     encoder_params = {
@@ -44,9 +44,12 @@ def run(raw_data, timesteps, out_type, title):
     spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft])
     spinn_pipeline(raw_data)
     s_dft_out = spinn_pipeline.output[-1]
-    s_dft_out = np.sqrt(s_dft_out[..., 0]**2 + s_dft_out[..., 1]**2)
+    s_dft_out = s_dft_out[0,0,0,0,off_bins:,:]
     np.save("results/snn_{}.npy".format(title), s_dft_out)
 
+    voltages = spinn_pipeline._algorithms["S-DFT"].voltage[:, 0,0,0,0,:,:]
+    vth = spinn_pipeline._algorithms["S-DFT"].neuron_params["threshold"]
+    print("vth: {}".format(vth))
 
     fft_alg = pyrads.algms.fft.FFT(
         fft_shape,
@@ -54,26 +57,32 @@ def run(raw_data, timesteps, out_type, title):
     )
     std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg])
     std_pipeline(raw_data)
-    fft_out = std_pipeline.output[-1]
+    fft_out = std_pipeline.output[-1][0,0,0,0,:]
     np.save("results/std_{}.npy".format(title), fft_out)
-    return (s_dft_out, fft_out)
+    return (s_dft_out, fft_out, voltages)
 
 
-def run_batch(raw_data, timesteps):
-    rmse_avg = 0
-    for i in range(4):
-        title = "TI_{}".format(i)
-        s_dft_out, fft_out = run(raw_data[i], timesteps, "spike", title)
-        s_dft_out = s_dft_out[0,0,0,0,4:]
-        # Measure RMSE
-        rmse = sft.utils.metrics.get_rmse(s_dft_out, fft_out)
-        rmse_avg += rmse
-        # print(rmse)
-        # Plot results
-        # fft_data = fft_out[0, 0, 0, 0, :]
-        # fig, axs = plt.subplots(2, figsize=(10,6))
-    rmse_avg /= 4
-    return rmse_avg
+def plot_voltages(voltages):
+    for i in range (voltages.shape[-2]-4):
+        plt.plot(voltages[:, i+4, 0])
+        plt.plot(voltages[:, i+4, 0])
+    plt.show()
+    plt.plot(voltages[300, :, 0])
+    plt.plot(voltages[300, :, 1])
+    plt.show()
+
+def plot_ft_components(ft_re, ft_im, ft_abs, timesteps):
+    fig, axs = plt.subplots(3)
+    axs[0].plot(ft_re)
+    axs[0].set_title("Real component")
+    axs[0].set_ylim([-0.5*timesteps, 0.5*timesteps])
+    axs[1].plot(ft_im)
+    axs[1].set_title("Imaginary component")
+    axs[2].plot(ft_abs)
+    axs[2].set_title("Modulus")
+    plt.tight_layout()
+    plt.show()
+    return
 
 def main(
         timesteps=300,
@@ -81,13 +90,6 @@ def main(
         out_type="spike",
         source="special_cases"
     ):
-    sim_times = [
-        16, 24, 32, 40, 48, 56, 64,
-        72, 80, 88, 96, 104, 112, 120,
-        128, 136, 144, 152, 160, 168,
-        176, 184, 192, 200, 208, 216,
-        224, 232, 240, 248, 256, 257
-    ]
     if source=="sample":
         raw_data = np.load("data/sample_chirp.npy")
     elif source=="special_cases":
@@ -95,22 +97,20 @@ def main(
         # reshape to standard data format
         raw_data = raw_data.reshape((4, 1,1,1,1, 1024))
 
-    errors = []
-    for i in range(len(sim_times)):
-        rmse_avg = run_batch(raw_data, timesteps=sim_times[i])
-        errors.append(rmse_avg)
-    
-    plt.plot(sim_times, errors)
+    raw_data = raw_data[0,:,:,:,:,::16]
+
+    s_dft_out, fft_data, voltages = run(raw_data, timesteps, out_type, "64_bins")
+    s_dft_abs = np.sqrt(s_dft_out[..., 0]**2 + s_dft_out[..., 1]**2)
+
+    fig, axs = plt.subplots(2)
+    axs[0].set_title("FFT")
+    axs[0].plot(fft_data)
+    axs[1].set_title("S-FT Numpy")
+    axs[1].plot(s_dft_abs)
+    fig.savefig("results/TI_sft.eps")
     plt.show()
-
-
-        # axs[0].set_title("FFT")
-        # axs[0].plot(fft_data)
-        # axs[1].set_title("S-FT Numpy")
-        # axs[1].plot(s_dft_out)
-        # fig.savefig("results/TI_{}.eps".format(i))
-        # if plot:
-        #     plt.show()
+    plot_voltages(voltages)
+    plot_ft_components(s_dft_out[:,0], s_dft_out[:, 1], s_dft_abs, timesteps)
     return
 
 
