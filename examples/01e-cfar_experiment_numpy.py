@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 # Local libraries
 import pyrads.algms.fft
+import pyrads.algms.os_cfar
 import pyrads.pipeline
 import sft.encoder
 import sft.preproc_pipeline
@@ -48,22 +49,34 @@ def run(raw_data, timesteps, out_type, title):
         "n_dims": 1,
         "timesteps": timesteps,
         "out_type": out_type,
+        "off_bins": 4,
+        "normalize": True,
+        "out_abs": True
+    }
+    oscfar_params = {
+        "n_dims": 1,
+        "window_width": 16,
+        "ordered_k": 6,
+        "alpha": 0.2,
+        "n_guard_cells": 2,
     }
     encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
     s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
+    oscfar = pyrads.algms.os_cfar.OSCFAR(
+        s_dft.out_data_shape,
+        **oscfar_params
+    )
 
-    spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft])
+    spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft, oscfar])
     spinn_pipeline(raw_data)
     s_dft_out = spinn_pipeline.output[-1]
-    s_dft_out = np.sqrt(s_dft_out[..., 0]**2 + s_dft_out[..., 1]**2)
     np.save("results/snn_{}.npy".format(title), s_dft_out)
-
 
     fft_alg = pyrads.algms.fft.FFT(
         fft_shape,
         **fft_params
     )
-    std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg])
+    std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg, oscfar])
     std_pipeline(raw_data)
     fft_out = std_pipeline.output[-1]
     np.save("results/std_{}.npy".format(title), fft_out)
@@ -71,16 +84,19 @@ def run(raw_data, timesteps, out_type, title):
 
 
 def run_batch(raw_data, timesteps):
-    rmse_avg = 0
+    acc_avg = 0
     for i in range(4):
         title = "TI_{}".format(i)
         s_dft_out, fft_out = run(raw_data[i], timesteps, "spike", title)
-        s_dft_out = s_dft_out[0,0,0,0,4:]
-        # Measure RMSE
-        rmse = sft.utils.metrics.get_rmse(s_dft_out, fft_out)
-        rmse_avg += rmse
-    rmse_avg /= 4
-    return rmse_avg
+        # Measure accuracy
+        acc = sft.utils.metrics.get_accuracy(s_dft_out, fft_out)
+        acc_avg += acc
+        # print(rmse)
+        # Plot results
+        # fft_data = fft_out[0, 0, 0, 0, :]
+        # fig, axs = plt.subplots(2, figsize=(10,6))
+    acc_avg /= 4
+    return acc_avg
 
 
 def run_experiment(raw_data, n_bins):
@@ -93,11 +109,11 @@ def run_experiment(raw_data, n_bins):
         step = 1
     raw_data = raw_data[:,:,:,:,:,::step]
     # Iterate for different simulation times
-    errors = []
+    acc = []
     for i in range(len(sim_times)):
-        rmse_avg = run_batch(raw_data, timesteps=sim_times[i])
-        errors.append(rmse_avg)
-    plt.plot(sim_times, errors, label=r'$n_{{bins}}={}$'.format(n_bins))
+        acc_avg = run_batch(raw_data, timesteps=sim_times[i])
+        acc.append(acc_avg)
+    plt.plot(sim_times, acc, label=r'$n_{{bins}}={}$'.format(n_bins))
     return
 
 
