@@ -20,20 +20,24 @@ class SDFT(pyrads.algorithm.Algorithm):
     }
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         # Load DFT parameters
         self.n_dims = kwargs.get("n_dims")
         # Load simulations parameters
         self.timesteps = kwargs.get("timesteps", 100)
         self.time_step = 1
         self.out_type = kwargs.get("out_type", "spike")
+        self.out_abs = kwargs.get("out_abs", False)
+        self.normalize = kwargs.get("normalize", False)
+        self.off_bins = kwargs.get("off_bins", 0)
+        # Load parent class
+        super().__init__(*args, **kwargs)
         if self.out_type not in ["spike", "voltage"]:
             raise ValueError(
                     "{} not a valid value for 'out_type'".format(self.out_type)
             )
         # SNN population variables
-        self.spikes = np.zeros(self.out_data_shape)
-        self.voltage = np.zeros((2*self.timesteps,) + self.out_data_shape)
+        self.spikes = np.zeros(self.layer_dim)
+        self.voltage = np.zeros((2*self.timesteps,) + self.layer_dim)
         # Initialize SNN and its connections
         self.calculate_weights()
         alpha = 0.25
@@ -50,8 +54,10 @@ class SDFT(pyrads.algorithm.Algorithm):
         Split in imag and real components. Only half spectrum is useful
         """
         self.out_data_shape = self.in_data_shape[:-1]
-        self.out_data_shape += (int(self.in_data_shape[-1]/2), )
-        self.out_data_shape += (2, )
+        self.out_data_shape += (int(self.in_data_shape[-1]/2)-self.off_bins, )
+        if not self.out_abs:
+            self.out_data_shape += (2, )
+        self.layer_dim = self.in_data_shape[:-1] + (int(self.in_data_shape[-1]/2), 2)
 
     def calculate_weights(self):
         """
@@ -61,8 +67,8 @@ class SDFT(pyrads.algorithm.Algorithm):
         n = np.arange(self.in_data_shape[-1]).reshape(self.in_data_shape[-1], 1)
         k = np.arange(self.in_data_shape[-1]).reshape(1, self.in_data_shape[-1])
         trig_factors = np.dot(n, k) * c
-        real_weights = np.cos(trig_factors)[:self.out_data_shape[-2]]
-        imag_weights = -np.sin(trig_factors)[:self.out_data_shape[-2]]
+        real_weights = np.cos(trig_factors)[:self.layer_dim[-2]]
+        imag_weights = -np.sin(trig_factors)[:self.layer_dim[-2]]
         # Normalize for the allowed range in SpiNNaker
         self.weights_re = real_weights*127
         self.weights_im = imag_weights*127
@@ -72,7 +78,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         Initializes compartments depending on the number of samples
         """
         l1 = SpikingNeuralLayer(
-                self.out_data_shape,
+                self.layer_dim,
                 (self.weights_re, self.weights_im),
                 v_threshold=self.neuron_params["threshold"],
                 time_step=1
@@ -113,7 +119,13 @@ class SDFT(pyrads.algorithm.Algorithm):
         # since the spike-time of 1 corresponds to the lowest possible value.
         spikes_all = np.where(spikes == 0, 2*self.timesteps, spikes)
         # Decode from TTFS spikes to input data format
-        output = 1.5*self.timesteps - spikes_all.reshape(self.out_data_shape)
+        output = 1.5*self.timesteps - spikes_all.reshape(self.layer_dim)
+        output = output[..., self.off_bins:,:]
+        if self.out_abs:
+            output = np.sqrt(output[..., 0]**2 + output[..., 1]**2)
+        if self.normalize:
+            output = output - output.min()
+            output /= output.max()
         return output
 
 

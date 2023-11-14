@@ -30,6 +30,18 @@ def simplify_ft(data):
     return cropped
 
 
+def get_accuracy(signal, ref, simp=False):
+    """
+    Calculate the accuracy for a classification map
+
+    Both @signal and @ref must be bool numpy arrays of the same shape
+    """
+    total_error = np.abs((signal.astype(np.int) - ref.astype(np.int))).sum()
+    rel_error = total_error / signal.size
+    accuracy = 1 - rel_error
+    return accuracy
+
+
 def get_mse(signal, ref, simp=False):
     """
     Calculate the mean square error of the signal
