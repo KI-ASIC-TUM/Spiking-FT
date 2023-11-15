@@ -72,12 +72,22 @@ def classic(chirp_n=0):
     fft = np.fft.fft(windowed)
 
     print("Target distance: {}".format(target_range[0][0]))
-    plotter(fft)
+    ft_plotter(fft)
 
 
-def plotter(fft):
+def ft_plotter(fft):
     range_labels = distance_range()
     plt.plot(range_labels[1:], np.abs(fft[1:256]))
+    plt.show()
+
+
+def cfar_plotter(fft, cfar):
+    range_labels = distance_range()
+    ratio = range_labels[-1] / 256
+    plt.plot(range_labels[1:], np.abs(fft[1:256]))
+    targets = np.where(cfar)[-1]
+    for target in targets:
+        plt.axvline(x=target*ratio, color="orange", linestyle="--")
     plt.show()
 
 
@@ -112,7 +122,8 @@ def run_std(raw_data):
     std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg, oscfar])
     std_pipeline(raw_data)
     fft = std_pipeline.output[-2]
-    return fft
+    cfar = std_pipeline.output[-1]
+    return fft, cfar
 
 
 def run_snn(raw_data, out_type="spike", timesteps=200):
@@ -150,18 +161,19 @@ def run_snn(raw_data, out_type="spike", timesteps=200):
     spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft, spinn_oscfar])
     spinn_pipeline(raw_data)
     sft_out = spinn_pipeline.output[-2][0,0,0,0,:]
-    return sft_out
+    cfar_out = spinn_pipeline.output[-1][0,0,0,0,:]
+    return sft_out, cfar_out
 
 
 def main(chirp_n=0):
     raw_data, targets = load_chirp(chirp_n)
-    fft = run_std(raw_data)
-    sft = run_snn(raw_data)
+    fft, cfar = run_std(raw_data)
+    sft, scfar = run_snn(raw_data)
     # Print distance to target
     target_range = targets[chirp_n]
     print("Target distance: {}".format(target_range[0][0]))
-    plotter(fft)
-    plotter(sft)
+    cfar_plotter(fft, cfar)
+    cfar_plotter(sft, scfar)
 
 
 if __name__ == "__main__":
