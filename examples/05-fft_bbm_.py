@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
 # Local libraries
+import pyrads.algms.dbscan
 import pyrads.algms.fft
 import pyrads.algms.os_cfar
 import pyrads.pipeline
@@ -16,6 +17,7 @@ import sft.s_dft_numpy
 import sft.utils.metrics
 
 
+# Radar configuration in the BBM simulator
 config = {
     "Nrange": 512,
     "bandwidth": 607.7e6,
@@ -24,9 +26,9 @@ config = {
 }
 
 
-def distance_range(n_distances=None):
+def get_range_labels(n_distances=None):
     """
-    Extract ranges from frequencies
+    Extract range labels from radar parameters
     """
     fs = 50e6
     eff_b = float(config['Nrange'])*config['bandwidth']/(fs*config['Tramp']/2+1)
@@ -46,6 +48,9 @@ def mean_shift(data, axis=-1):
 
 
 def load_chirp(chirp_n):
+    """
+    Load chirp from BBM dataset
+    """
     data_path = "data/BBM/data.mat"
     targets_path = "data/BBM/targets.mat"
     data_dict = scipy.io.loadmat(data_path)
@@ -76,13 +81,21 @@ def classic(chirp_n=0):
 
 
 def ft_plotter(fft):
-    range_labels = distance_range()
+    """
+    Generate plot of the FT
+    """
+    range_labels = get_range_labels()
     plt.plot(range_labels[1:], np.abs(fft[1:256]))
     plt.show()
 
 
 def cfar_plotter(fft, cfar):
-    range_labels = distance_range()
+    """
+    Generate a plot of the FT and CFAR detections on top
+    """
+    # Get range labels for FT spectrum
+    range_labels = get_range_labels()
+    # Calculate ratio between max range and max bin
     ratio = range_labels[-1] / 256
     plt.plot(range_labels[1:], np.abs(fft[1:256]))
     targets = np.where(cfar)[-1]
@@ -91,7 +104,28 @@ def cfar_plotter(fft, cfar):
     plt.show()
 
 
+def cluster_plotter(fft, clusters):
+    """
+    Generate a plot of the FT and CFAR detections on top
+    """
+    # First color is for noise or border points
+    cluster_palette = ["grey", "orange", "green", "salmon"]
+    # Get range labels for FT spectrum
+    range_labels = get_range_labels()
+    # Calculate ratio between max range and max bin
+    ratio = range_labels[-1] / 256
+    plt.plot(range_labels[1:], np.abs(fft[1:256]),zorder=10)
+    targets = np.where(clusters>=0)[-1]
+    for target in targets:
+        color = cluster_palette[clusters[target]]
+        plt.axvline(x=target*ratio, color=color, linestyle="--", linewidth=1, zorder=1)
+    plt.show()
+
+
 def run_std(raw_data):
+    """
+    Run pipeline with standard algorithms on the input data
+    """
     fft_shape = raw_data.shape
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
     # Define pipeline stages
@@ -110,6 +144,11 @@ def run_std(raw_data):
         "alpha": 0.4,
         "n_guard_cells": 4,
     }
+    dbscan_params = {
+        "n_dims": 1,
+        "min_pts": 2,
+        "epsilon": 3,
+    }
     fft_alg = pyrads.algms.fft.FFT(
         fft_shape,
         **fft_params
@@ -118,16 +157,26 @@ def run_std(raw_data):
         fft_alg.out_data_shape,
         **oscfar_params
     )
+    dbscan = pyrads.algms.dbscan.DBSCAN(
+        oscfar.out_data_shape,
+        **dbscan_params
+    )
     # Create instance of pipeline and run it with input data
-    std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg, oscfar])
+    std_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, fft_alg, oscfar, dbscan])
     std_pipeline(raw_data)
-    fft = std_pipeline.output[-2]
-    cfar = std_pipeline.output[-1]
-    return fft, cfar
+    fft = std_pipeline.output[-3]
+    cfar = std_pipeline.output[-2]
+    clusters = std_pipeline.output[-1]
+    return fft, cfar, clusters
 
 
 def run_snn(raw_data, out_type="spike", timesteps=200):
-    raw_data = raw_data.reshape((1,1,1,1,-1))
+    """
+    Run pipeline with spiking FT on the input data
+
+    The algorithms other than the S-FT are classic algorithms
+    """
+    # raw_data = raw_data.reshape((1,1,1,1,-1))
     fft_shape = raw_data.shape
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
     # Define pipeline stages
@@ -152,28 +201,40 @@ def run_snn(raw_data, out_type="spike", timesteps=200):
         "alpha": 0.4,
         "n_guard_cells": 4,
     }
+    dbscan_params = {
+        "n_dims": 1,
+        "min_pts": 2,
+        "epsilon": 3,
+    }
     encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
     s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
     spinn_oscfar = pyrads.algms.os_cfar.OSCFAR(
         s_dft.out_data_shape,
         **spinn_oscfar_params
     )
-    spinn_pipeline = pyrads.pipeline.Pipeline([pre_pipeline, encoder, s_dft, spinn_oscfar])
+    dbscan = pyrads.algms.dbscan.DBSCAN(
+        spinn_oscfar.out_data_shape,
+        **dbscan_params
+    )
+    spinn_pipeline = pyrads.pipeline.Pipeline(
+        [pre_pipeline, encoder, s_dft, spinn_oscfar, dbscan]
+    )
     spinn_pipeline(raw_data)
-    sft_out = spinn_pipeline.output[-2][0,0,0,0,:]
-    cfar_out = spinn_pipeline.output[-1][0,0,0,0,:]
-    return sft_out, cfar_out
+    sft_out = spinn_pipeline.output[-3]
+    cfar_out = spinn_pipeline.output[-2]
+    dbscan_out = spinn_pipeline.output[-1]
+    return sft_out, cfar_out, dbscan_out
 
 
 def main(chirp_n=0):
     raw_data, targets = load_chirp(chirp_n)
-    fft, cfar = run_std(raw_data)
-    sft, scfar = run_snn(raw_data)
+    fft, cfar, clusters = run_std(raw_data)
+    sft, scfar, sclusters = run_snn(raw_data)
     # Print distance to target
     target_range = targets[chirp_n]
     print("Target distance: {}".format(target_range[0][0]))
-    cfar_plotter(fft, cfar)
-    cfar_plotter(sft, scfar)
+    cluster_plotter(fft, clusters)
+    cluster_plotter(sft, sclusters)
 
 
 if __name__ == "__main__":

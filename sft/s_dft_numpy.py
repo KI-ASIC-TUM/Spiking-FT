@@ -172,8 +172,8 @@ class SpikingNeuralLayer():
         Calculate the total current that circulates inside each neuron
         """
         # Calculate separately the currents to the real and imaginary neurons
-        z_real = np.dot(self.weights[0], input_spikes[0,0,0,0,:])
-        z_imag = np.dot(self.weights[1], input_spikes[0,0,0,0,:])
+        z_real = np.dot(self.weights[0], input_spikes)
+        z_imag = np.dot(self.weights[1], input_spikes)
         z = np.vstack((z_real, z_imag)).transpose()
         # Add bias to the result and multiply by time_step
         z += self.bias
