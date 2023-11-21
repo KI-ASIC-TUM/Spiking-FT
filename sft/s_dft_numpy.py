@@ -12,18 +12,13 @@ class SDFT(pyrads.algorithm.Algorithm):
     Parent class for radar algorithms
     """
     NAME = "S-DFT"
-    neuron_params = {
-        "threshold":20000., # high value so neurons don't spike
-        "i_offset":500.0,
-        "t_silent":50,
-
-    }
 
     def __init__(self, *args, **kwargs):
         # Load DFT parameters
         self.n_dims = kwargs.get("n_dims")
         # Load simulations parameters
         self.timesteps = kwargs.get("timesteps", 100)
+        self.alpha = kwargs.get("alpha", 0.0625)
         self.time_step = 1
         self.out_type = kwargs.get("out_type", "spike")
         self.out_abs = kwargs.get("out_abs", False)
@@ -40,8 +35,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.voltage = np.zeros((2*self.timesteps,) + self.layer_dim)
         # Initialize SNN and its connections
         self.calculate_weights()
-        alpha = 0.25
-        v_th = alpha*0.25*self.weights_re[0].sum()*self.timesteps
+        v_th = self.alpha*0.25*self.weights_re[0].sum()*self.timesteps
         # Charge-and-spike neuron parameters
         self.neuron_params = {}
         self.neuron_params["threshold"] = v_th
@@ -93,21 +87,21 @@ class SDFT(pyrads.algorithm.Algorithm):
         counter = 0
         current_time = 0
         while counter < self.timesteps:
+            current_time = counter * self.time_step
             causal_neurons = (spike_times < current_time)
             out_l1 = self.l1.update_state(causal_neurons) * current_time
             self.voltage[counter] = self.l1.v_membrane
             self.spikes += out_l1
-            current_time = counter * self.time_step
             counter += 1
         # Spiking stage
         self.l1.spiking = True
         self.l1.bias = 2*self.neuron_params["threshold"] / self.timesteps
         causal_neurons = np.zeros_like(causal_neurons)
         while counter < 2*self.timesteps:
+            current_time = counter * self.time_step
             out_l1 = self.l1.update_state(causal_neurons)
             self.spikes += out_l1 * (current_time)
             self.voltage[counter] = self.l1.v_membrane
-            current_time = counter * self.time_step
             counter += 1
         return self.spikes
 
