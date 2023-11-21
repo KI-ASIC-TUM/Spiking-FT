@@ -17,12 +17,51 @@ import sft.s_dft_numpy
 import sft.utils.metrics
 
 
+plt.rcParams.update({
+    "font.family": "serif",  # use serif/main font for text elements
+    "text.usetex": True,     # use inline math for ticks
+    'axes.unicode_minus': False,
+    # Use 10pt font in plots, to match 10pt font in document
+    "axes.labelsize": 10,
+    "axes.titlesize": 12,
+    "font.size": 10,
+    # Make the legend/label fonts a little smaller
+    "legend.fontsize": 10,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "axes.spines.right": False,
+    "axes.spines.top": False
+    })
+
 # Radar configuration in the BBM simulator
 config = {
     "Nrange": 512,
     "bandwidth": 607.7e6,
     "Tramp": 2*20.48e-6+0e-6,
     "c0": 299792458
+}
+
+# Pipeline configuration
+off_bins = 12
+fft_params = {
+    "n_dims": 1,
+    "type": "range",
+    "out_format": "modulus",
+    "normalize": True,
+    "off_bins": off_bins,
+    "unitary": True
+}
+oscfar_params = {
+    "n_dims": 1,
+    "window_width": 32,
+    "ordered_k": 6,
+    "alpha": 0.4,
+    "n_guard_cells": 4,
+}
+dbscan_params = {
+    "n_dims": 1,
+    "min_pts": 1,
+    "epsilon": 3,
 }
 
 
@@ -47,12 +86,13 @@ def mean_shift(data, axis=-1):
     return data
 
 
-def load_chirp(chirp_n):
+def load_chirp(target, noise):
     """
     Load chirp from BBM dataset
     """
-    data_path = "data/BBM/data.mat"
-    targets_path = "data/BBM/targets.mat"
+    root_path = "data/BBM_{}_{}".format(target, noise)
+    data_path = "{}/data.mat".format(root_path)
+    targets_path = "{}/targets.mat".format(root_path)
     data_dict = scipy.io.loadmat(data_path)
     targets_dict = scipy.io.loadmat(targets_path)
     data = data_dict["data"]
@@ -60,8 +100,7 @@ def load_chirp(chirp_n):
     targets_list = []
     for i in range(targets.size):
         targets_list.append(targets[0,0,i][1])
-    chirp = data[:, 0, 0, chirp_n]
-    return chirp, targets_list
+    return data, targets_list
 
 
 def classic(chirp_n=0):
@@ -114,11 +153,39 @@ def cluster_plotter(fft, clusters):
     range_labels = get_range_labels()
     # Calculate ratio between max range and max bin
     ratio = range_labels[-1] / 256
-    plt.plot(range_labels[1:], np.abs(fft[1:256]),zorder=10)
-    targets = np.where(clusters>=0)[-1]
-    for target in targets:
-        color = cluster_palette[clusters[target]]
-        plt.axvline(x=target*ratio, color=color, linestyle="--", linewidth=1, zorder=1)
+    plt.plot(range_labels[off_bins:], np.abs(fft),zorder=10)
+    detections = np.where(clusters>=0)[-1]
+    for detection in detections:
+        plt.axvline(
+            x=(detection+off_bins)*ratio,
+            color=cluster_palette[clusters[detection]],
+            linestyle="--",
+            linewidth=1,
+            zorder=1
+        )
+    plt.show()
+
+
+def performance_plotter(snn_prec, snn_rec, std_prec, std_rec, errors, timesteps, title):
+    latex_w = 5
+    latex_h = latex_w * 0.7
+    fig = plt.figure(figsize=(latex_w, latex_h))
+    plt.plot(timesteps, snn_prec, color="cornflowerblue", label="Precision")
+    plt.plot(timesteps, snn_rec, color="red", label="Recall")
+    plt.ylim((0.5, 1))
+    plt.legend()
+    plt.axhline(y=std_prec, color="lightblue", linestyle="--")
+    plt.axhline(y=std_rec, color="orange", linestyle="--")
+    plt.xlabel("S-FT timesteps")
+    plt.savefig("results/performance_{}.eps".format(title))
+    plt.show()
+    # Plot errors
+    fig = plt.figure(figsize=(latex_w, latex_h))
+    plt.plot(timesteps, errors, color="cornflowerblue", label="RMSE")
+    plt.ylim((0.04, 0.2))
+    plt.legend()
+    plt.xlabel("S-FT timesteps")
+    plt.savefig("results/rmse_{}.eps".format(title))
     plt.show()
 
 
@@ -129,26 +196,6 @@ def run_std(raw_data):
     fft_shape = raw_data.shape
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
     # Define pipeline stages
-    fft_params = {
-        "n_dims": 1,
-        "type": "range",
-        "out_format": "modulus",
-        "normalize": True,
-        "off_bins": 0,
-        "unitary": True
-    }
-    oscfar_params = {
-        "n_dims": 1,
-        "window_width": 32,
-        "ordered_k": 6,
-        "alpha": 0.4,
-        "n_guard_cells": 4,
-    }
-    dbscan_params = {
-        "n_dims": 1,
-        "min_pts": 2,
-        "epsilon": 3,
-    }
     fft_alg = pyrads.algms.fft.FFT(
         fft_shape,
         **fft_params
@@ -170,7 +217,7 @@ def run_std(raw_data):
     return fft, cfar, clusters
 
 
-def run_snn(raw_data, out_type="spike", timesteps=200):
+def run_snn(raw_data, timesteps=100):
     """
     Run pipeline with spiking FT on the input data
 
@@ -189,28 +236,17 @@ def run_snn(raw_data, out_type="spike", timesteps=200):
     sft_params = {
         "n_dims": 1,
         "timesteps": timesteps,
-        "out_type": out_type,
-        "off_bins": 0,
+        "alpha": 0.0625,
+        "out_type": "spike",
+        "off_bins": off_bins,
         "normalize": True,
         "out_abs": True
-    }
-    spinn_oscfar_params = {
-        "n_dims": 1,
-        "window_width": 32,
-        "ordered_k": 6,
-        "alpha": 0.4,
-        "n_guard_cells": 4,
-    }
-    dbscan_params = {
-        "n_dims": 1,
-        "min_pts": 2,
-        "epsilon": 3,
     }
     encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
     s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
     spinn_oscfar = pyrads.algms.os_cfar.OSCFAR(
         s_dft.out_data_shape,
-        **spinn_oscfar_params
+        **oscfar_params
     )
     dbscan = pyrads.algms.dbscan.DBSCAN(
         spinn_oscfar.out_data_shape,
@@ -226,15 +262,114 @@ def run_snn(raw_data, out_type="spike", timesteps=200):
     return sft_out, cfar_out, dbscan_out
 
 
-def main(chirp_n=0):
-    raw_data, targets = load_chirp(chirp_n)
+def experiment_single_chirp(
+        raw_data,
+        targets,
+        timesteps=100,
+        plot=True,
+        print_metrics=True
+    ):
+    """
+    Run FFT and SFT on a single radar chirp
+    """
     fft, cfar, clusters = run_std(raw_data)
-    sft, scfar, sclusters = run_snn(raw_data)
+    snn, scfar, sclusters = run_snn(raw_data, timesteps=timesteps)
     # Print distance to target
-    target_range = targets[chirp_n]
-    print("Target distance: {}".format(target_range[0][0]))
-    cluster_plotter(fft, clusters)
-    cluster_plotter(sft, sclusters)
+    target_range = targets[0][0]
+    target = [target_range]
+    # Get precision
+    range_labels = get_range_labels()
+    ratio = range_labels[-1] / 256
+    std_prec, std_rec = sft.utils.metrics.get_clustering_performance(
+        clusters, target, off_bins, ratio
+    )
+    snn_prec, snn_rec = sft.utils.metrics.get_clustering_performance(
+        sclusters, target, off_bins, ratio
+    )
+    rmse = sft.utils.metrics.get_rmse(fft, snn)
+    if print_metrics:
+        print("Target distance: {}".format(target_range))
+        print("std pipeline precision: {}".format(std_prec))
+        print("std pipeline recall: {}".format(std_rec))
+        print("SNN pipeline precision: {}".format(snn_prec))
+        print("SNN pipeline recall: {}".format(snn_rec))
+    if plot:
+        cluster_plotter(fft, clusters)
+        cluster_plotter(snn, sclusters)
+    return (std_prec, std_rec, snn_prec, snn_rec, rmse)
+
+
+def run_batch(data, targets_list, timesteps=100, print_metrics=False):
+    """
+    Run FFT and SFT for all scenes for a specific SFT configuration
+    """
+    n_scenes = len(targets_list)
+    std_prec  = std_rec  = snn_prec  = snn_rec  = rmse = 0
+    for chirp_n in range(n_scenes):
+        _std_prec, _std_rec, _snn_prec, _snn_rec, _rmse = experiment_single_chirp(
+            data[:, 0, 0, chirp_n],
+            targets_list[chirp_n],
+            timesteps=timesteps,
+            plot=False,
+            print_metrics=False
+        )
+        std_prec += _std_prec
+        std_rec += _std_rec
+        snn_prec += _snn_prec
+        snn_rec += _snn_rec
+        rmse += _rmse
+    std_prec /= n_scenes
+    std_rec /= n_scenes
+    snn_prec /= n_scenes
+    snn_rec /= n_scenes
+    rmse /= n_scenes
+    if print_metrics:
+        print("std pipeline precision: {}".format(std_prec))
+        print("std pipeline recall: {}".format(std_rec))
+        print("SNN pipeline precision: {}".format(snn_prec))
+        print("SNN pipeline recall: {}".format(snn_rec))
+        print("Root mean squared error: {}".format(rmse))
+    return (std_prec, std_rec, snn_prec, snn_rec, rmse)
+
+
+def single_run(data, targets, timesteps):
+    """
+    Run the scenes for a single SFT configuration
+    """
+    run_batch(data, targets, timesteps, print_metrics=True)
+
+
+def multiple_runs(data, targets, title="car_no_noise"):
+    """
+    Run the scenes for different SFT configurations
+    """
+    snn_rec = []
+    snn_prec = []
+    timesteps = []
+    errors = []
+    for n in range(30, 290, 20):
+        std_prec, std_rec, snn_prec_, snn_rec_, err = run_batch(data, targets, n)
+        snn_prec.append(snn_prec_)
+        snn_rec.append(snn_rec_)
+        errors.append(err)
+        timesteps.append(n)
+    performance_plotter(snn_prec, snn_rec, std_prec, std_rec, errors, timesteps, title)
+
+
+def main(target="pedestrian", noise="lownoise"):
+    # Plot the result for a single chirp and SFT configuration
+    # data, targets = load_chirp(target, noise)
+    # experiment_single_chirp(data[:, 0, 0, 40],
+    #         targets[40],
+    #         timesteps=100,
+    #     )
+    # single_run(data, targets, timesteps=160)
+
+    # Run the SFT for different configurations and for different datasets
+    for target in ["car", "pedestrian"]:
+        data, targets = load_chirp(target, noise)
+        title = "{}_{}".format(target, noise)
+        multiple_runs(data, targets, title)
 
 
 if __name__ == "__main__":
