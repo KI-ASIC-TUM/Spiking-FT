@@ -54,6 +54,39 @@ def get_precision(signal, ref, simp=False):
     return precision
 
 
+def get_clustering_performance(clusters, targets, offset, ratio, tol=2):
+    """
+    Calculate the precision of a clustering pipeline
+    """
+    n_targets = len(targets)
+    n_clusters = max(clusters)
+    # If there are no clusters, the output is -1. Change to 0 to avoid errors
+    n_clusters = max(n_clusters, 0)
+    found_targets = []
+    matched_clusters = []
+    tp = 0
+    # Ignore cluster=0 (noise)
+    for cluster in range(1, n_clusters+1):
+        match = False
+        points = np.where(clusters==cluster)[0] + offset
+        for point in points:
+            for target in targets:
+                if abs(point*ratio-target) < tol:
+                    found_targets.append(target)
+                    match = True
+                    break
+            if match:
+                tp += 1
+                matched_clusters.append(cluster)
+                break
+    if n_clusters == 0:
+        precision = 1
+    else:
+        precision = tp / n_clusters
+    recall = tp / n_targets
+    return precision, recall
+
+
 def get_mse(signal, ref, simp=False):
     """
     Calculate the mean square error of the signal
