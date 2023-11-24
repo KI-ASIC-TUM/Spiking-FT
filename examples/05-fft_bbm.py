@@ -27,8 +27,8 @@ plt.rcParams.update({
     "font.size": 10,
     # Make the legend/label fonts a little smaller
     "legend.fontsize": 10,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
     "axes.spines.right": False,
     "axes.spines.top": False
     })
@@ -153,6 +153,7 @@ def cluster_plotter(fft, clusters):
     range_labels = get_range_labels()
     # Calculate ratio between max range and max bin
     ratio = range_labels[-1] / 256
+    fig = plt.figure()
     plt.plot(range_labels[off_bins:], np.abs(fft),zorder=10)
     detections = np.where(clusters>=0)[-1]
     for detection in detections:
@@ -163,30 +164,84 @@ def cluster_plotter(fft, clusters):
             linewidth=1,
             zorder=1
         )
-    plt.show()
+    # plt.show()
 
 
-def performance_plotter(snn_prec, snn_rec, std_prec, std_rec, errors, timesteps, title):
-    latex_w = 5
+def performance_plotter(
+        snn_prec,
+        snn_rec,
+        std_prec,
+        std_rec,
+        errors,
+        timesteps,
+        title,
+        boxplot=True,
+        plot_rmse_mean=True,
+        show=False,
+        outliers=False
+    ):
+    latex_w = 2.5
     latex_h = latex_w * 0.7
     fig = plt.figure(figsize=(latex_w, latex_h))
     plt.plot(timesteps, snn_prec, color="cornflowerblue", label="Precision")
     plt.plot(timesteps, snn_rec, color="red", label="Recall")
-    plt.ylim((0.5, 1))
+    plt.title(title)
+    plt.ylim((0.3, 1.05))
+    plt.yticks(np.arange(0.4, 1.1, 0.1))
     plt.legend()
     plt.axhline(y=std_prec, color="lightblue", linestyle="--")
     plt.axhline(y=std_rec, color="orange", linestyle="--")
     plt.xlabel("S-FT timesteps")
+    fig.tight_layout()
     plt.savefig("results/performance_{}.eps".format(title))
-    plt.show()
-    # Plot errors
-    fig = plt.figure(figsize=(latex_w, latex_h))
-    plt.plot(timesteps, errors, color="cornflowerblue", label="RMSE")
-    plt.ylim((0.04, 0.2))
-    plt.legend()
-    plt.xlabel("S-FT timesteps")
-    plt.savefig("results/rmse_{}.eps".format(title))
-    plt.show()
+    plt.savefig("results/performance_{}.pdf".format(title), dpi=300)
+    if show:
+        plt.show()
+    else:
+        plt.clf()
+    if boxplot:
+        # Plot errors boxplots
+        fig = plt.figure(figsize=(latex_w, latex_h))
+        if outliers:
+            plt.boxplot(
+                errors,
+                positions=timesteps,
+                widths=12,
+                flierprops={'marker': '+', 'markersize': 3}
+            )
+        else:
+            plt.boxplot(
+                errors,
+                positions=timesteps,
+                widths=12,
+                showfliers=False
+            )
+        plt.title(title)
+        plt.ylim((0.0, 0.7))
+        plt.yticks(np.arange(0.1, 0.8, 0.1))
+        plt.xticks(np.arange(100, 300, 100), [100, 200])
+        # plt.legend()
+        plt.xlabel("S-FT timesteps")
+        fig.tight_layout()
+        plt.savefig("results/rmse_boxplot_{}.eps".format(title))
+        plt.savefig("results/rmse_boxplot_{}.pdf".format(title), dpi=300)
+    if plot_rmse_mean:
+        # Plot errors mean
+        errors_mean = np.array(errors).mean(axis=1)
+        fig = plt.figure(figsize=(latex_w, latex_h))
+        plt.plot(timesteps, errors_mean, color="cornflowerblue", label="RMSE")
+        plt.title(title)
+        plt.ylim((0.025, 0.21))
+        plt.yticks(np.arange(0.04, 0.24, 0.04))
+        # plt.legend()
+        plt.xlabel("S-FT timesteps")
+        fig.tight_layout()
+        plt.savefig("results/rmse_{}.eps".format(title))
+        plt.savefig("results/rmse_{}.pdf".format(title), dpi=300)
+    if show:
+        plt.show()
+    else:
+        plt.clf()
 
 
 def run_std(raw_data):
@@ -296,6 +351,7 @@ def experiment_single_chirp(
     if plot:
         cluster_plotter(fft, clusters)
         cluster_plotter(snn, sclusters)
+        plt.show()
     return (std_prec, std_rec, snn_prec, snn_rec, rmse)
 
 
@@ -304,7 +360,8 @@ def run_batch(data, targets_list, timesteps=100, print_metrics=False):
     Run FFT and SFT for all scenes for a specific SFT configuration
     """
     n_scenes = len(targets_list)
-    std_prec  = std_rec  = snn_prec  = snn_rec  = rmse = 0
+    std_prec  = std_rec  = snn_prec  = snn_rec  = 0
+    rmse = []
     for chirp_n in range(n_scenes):
         _std_prec, _std_rec, _snn_prec, _snn_rec, _rmse = experiment_single_chirp(
             data[:, 0, 0, chirp_n],
@@ -317,18 +374,19 @@ def run_batch(data, targets_list, timesteps=100, print_metrics=False):
         std_rec += _std_rec
         snn_prec += _snn_prec
         snn_rec += _snn_rec
-        rmse += _rmse
+        rmse.append(_rmse)
     std_prec /= n_scenes
     std_rec /= n_scenes
     snn_prec /= n_scenes
     snn_rec /= n_scenes
-    rmse /= n_scenes
+    rmse = np.array(rmse)
+    rmse_dist = np.array((rmse.mean(), rmse.std()))
     if print_metrics:
         print("std pipeline precision: {}".format(std_prec))
         print("std pipeline recall: {}".format(std_rec))
         print("SNN pipeline precision: {}".format(snn_prec))
         print("SNN pipeline recall: {}".format(snn_rec))
-        print("Root mean squared error: {}".format(rmse))
+        print("Root mean squared error: {}".format(rmse_dist[0]))
     return (std_prec, std_rec, snn_prec, snn_rec, rmse)
 
 
@@ -356,20 +414,21 @@ def multiple_runs(data, targets, title="car_no_noise"):
     performance_plotter(snn_prec, snn_rec, std_prec, std_rec, errors, timesteps, title)
 
 
-def main(target="pedestrian", noise="lownoise"):
+def main(target="car", noise="highnoise"):
     # Plot the result for a single chirp and SFT configuration
     # data, targets = load_chirp(target, noise)
-    # experiment_single_chirp(data[:, 0, 0, 40],
-    #         targets[40],
+    # experiment_single_chirp(data[:, 0, 0, 2],
+    #         targets[2],
     #         timesteps=100,
     #     )
     # single_run(data, targets, timesteps=160)
 
-    # Run the SFT for different configurations and for different datasets
+    # Run the SFT for different configurations and datasets
     for target in ["car", "pedestrian"]:
-        data, targets = load_chirp(target, noise)
-        title = "{}_{}".format(target, noise)
-        multiple_runs(data, targets, title)
+        for noise in ["lownoise", "highnoise"]:
+            data, targets = load_chirp(target, noise)
+            title = "{}_{}".format(target, noise)
+            multiple_runs(data, targets, title)
 
 
 if __name__ == "__main__":
