@@ -51,8 +51,8 @@ d_max = mmic.Nrange/2*d_res
 %                  ADC nonlinearity (SFDR)
 %                  AFE noise vs. gain setting
 %                  To set AFE gain, use N_Gafe
-mmic.model_level = 1;
-mmic.Gafe = 20;               % AFE gain [dB]
+mmic.model_level = 0;
+mmic.Gafe = 20.0;               % AFE gain [dB]
 mmic.N_Gafe = 6;                % select gain configuration 
                                 % 6 => 20 dB, 7 => 26 dB 8 => 32 dB
 
@@ -70,21 +70,10 @@ mmic.adc.nonlin_on = 0;         % activate ADC non-linearity
 % Visualization
 mmic.plot.range_doppler = 0;    % Plot range doppler (simulation only)
 
-n_distances = 200;
-create_dataset(15, 0.9, './data/BBM_car_lownoise/', n_distances, d_max, mmic)
-create_dataset(0, 0.5, './data/BBM_pedestrian_lownoise/', n_distances, d_max, mmic)
+n_distances = 80;
 
-% Switch noise ON
-mmic.afenoise = 1;              % activate AFE noise 
-mmic.adcnoise = 1;              % activate ADC noise
-mmic.phasenoise = 1;            % activate Phase noise
-mmic.thermalnoise = 1;          % activate Thermal noise
-mmic.adc.sat_on = 1;            % activate adc saturation
-mmic.adc.nonlin_on = 1;         % activate ADC non-linearity
-
-
-create_dataset(15, 0.9, './data/BBM_car_highnoise/', n_distances, d_max, mmic)
-create_dataset(5, 0.5, './data/BBM_pedestrian_highnoise/', n_distances, d_max, mmic)
+create_dataset(15, 1, './data/BBM_car_nonoise/', n_distances, d_max, mmic)
+create_dataset(0, 0.5, './data/BBM_pedestrian_nonoise/', n_distances, d_max, mmic)
 
 function create_dataset(rcs, dmax_ratio, path, n_distances, d_max, mmic)
     target = [];
@@ -134,3 +123,4 @@ function create_dataset(rcs, dmax_ratio, path, n_distances, d_max, mmic)
     disp('Files saved')
     copyfile('run_all.m', DUMP_PATH) 
 end
+

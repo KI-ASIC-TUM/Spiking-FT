@@ -52,14 +52,14 @@ d_max = mmic.Nrange/2*d_res
 %                  AFE noise vs. gain setting
 %                  To set AFE gain, use N_Gafe
 mmic.model_level = 1;
-mmic.Gafe = 32.0;               % AFE gain [dB]
-mmic.N_Gafe = 8;                % select gain configuration 
+mmic.Gafe = 20;               % AFE gain [dB]
+mmic.N_Gafe = 6;                % select gain configuration 
                                 % 6 => 20 dB, 7 => 26 dB 8 => 32 dB
 
 % System settings
 mmic.tia_clipping = 0;          % activate TIA clipping
 mmic.afenoise = 0;              % activate AFE noise 
-mmic.adcnoise = 1;              % activate ADC noise
+mmic.adcnoise = 0;              % activate ADC noise
 mmic.phasenoise = 0;            % activate Phase noise
 mmic.thermalnoise = 0;          % activate Thermal noise
 mmic.pll = 0;                   % activate PLL
@@ -70,10 +70,21 @@ mmic.adc.nonlin_on = 0;         % activate ADC non-linearity
 % Visualization
 mmic.plot.range_doppler = 0;    % Plot range doppler (simulation only)
 
-n_distances = 80;
-
-create_dataset(15, 1, './data/BBM_car_lownoise/', n_distances, d_max, mmic)
+n_distances = 200;
+create_dataset(15, 0.9, './data/BBM_car_lownoise/', n_distances, d_max, mmic)
 create_dataset(0, 0.5, './data/BBM_pedestrian_lownoise/', n_distances, d_max, mmic)
+
+% Switch noise ON
+mmic.afenoise = 1;              % activate AFE noise 
+mmic.adcnoise = 1;              % activate ADC noise
+mmic.phasenoise = 1;            % activate Phase noise
+mmic.thermalnoise = 1;          % activate Thermal noise
+mmic.adc.sat_on = 1;            % activate adc saturation
+mmic.adc.nonlin_on = 1;         % activate ADC non-linearity
+
+
+create_dataset(15, 0.9, './data/BBM_car_highnoise/', n_distances, d_max, mmic)
+create_dataset(5, 0.5, './data/BBM_pedestrian_highnoise/', n_distances, d_max, mmic)
 
 function create_dataset(rcs, dmax_ratio, path, n_distances, d_max, mmic)
     target = [];

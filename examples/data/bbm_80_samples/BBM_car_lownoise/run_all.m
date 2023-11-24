@@ -70,7 +70,6 @@ mmic.adc.nonlin_on = 0;         % activate ADC non-linearity
 % Visualization
 mmic.plot.range_doppler = 0;    % Plot range doppler (simulation only)
 
-n_distances = 200;
 create_dataset(15, 0.9, './data/BBM_car_lownoise/', n_distances, d_max, mmic)
 create_dataset(0, 0.5, './data/BBM_pedestrian_lownoise/', n_distances, d_max, mmic)
 
@@ -82,7 +81,7 @@ mmic.thermalnoise = 1;          % activate Thermal noise
 mmic.adc.sat_on = 1;            % activate adc saturation
 mmic.adc.nonlin_on = 1;         % activate ADC non-linearity
 
-
+n_distances = 80;
 create_dataset(15, 0.9, './data/BBM_car_highnoise/', n_distances, d_max, mmic)
 create_dataset(5, 0.5, './data/BBM_pedestrian_highnoise/', n_distances, d_max, mmic)
 
