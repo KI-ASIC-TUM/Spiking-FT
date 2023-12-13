@@ -1,16 +1,10 @@
-# Standard libraries
-import os
-import logging
-import matplotlib.pyplot as plt
-import numpy as np
-import typing as ty
-# Third-party libraries
 from lava.magma.core.sync.protocols.loihi_protocol import LoihiProtocol
 from lava.magma.core.model.nc.ports import NcInPort, NcOutPort
 from lava.magma.core.model.nc.type import LavaNcType
 try:
     from lava.magma.core.model.nc.net import NetL2
 except ImportError:
+
     class NetL2:
         pass
 from lava.magma.core.model.nc.tables import Nodes
@@ -20,6 +14,7 @@ from lava.magma.core.model.nc.model import AbstractNcProcessModel
 from lava.magma.core.model.nc.var import NcVar
 from lava.proc.lif.process import LIF, AbstractLIF
 from lava.magma.core.learning.constants import W_TRACE_FRACTIONAL_PART
+
 from lava.proc.embedded_io.spike import PyToNxAdapter, NxToPyAdapter
 from lava.proc.io.source import RingBuffer as SpikeGenerator
 from lava.proc.io.sink import RingBuffer as Sink
@@ -30,8 +25,13 @@ from lava.magma.core.run_configs import Loihi2HwCfg
 from lava.magma.core.process.variable import Var
 from lava.magma.core.callback_fx import NxSdkCallbackFx
 from lava.utils.profiler import Profiler
-# Local libraries
-import pyrads.algorithm
+
+
+import os
+import logging
+import matplotlib.pyplot as plt
+import numpy as np
+import typing as ty
 
 
 class Probes(NxSdkCallbackFx):
@@ -202,148 +202,127 @@ class TCBSModel(AbstractNcProcessModel):
         # Connect output axon to OutPort of Process
         ax_out.connect(self.s_out)
 
-
-class SDFT(pyrads.algorithm.Algorithm):
+def calculate_weights(N):
     """
-    Parent class for radar algorithms
+    Calculate the weights based on the DFT equation
     """
-    NAME = "S-DFT"
+    c = 2 * np.pi/N
+    n = np.arange(N).reshape(N, 1)
+    k = np.arange(N).reshape(1, N)
+    trig_factors = np.dot(n, k) * c
+    real_weights = np.cos(trig_factors)[:N//2]
+    imag_weights = -np.sin(trig_factors)[:N//2]
+    weights = np.vstack((real_weights, imag_weights))*127
+    weights = weights.astype(np.int8)
+    return weights
 
-    def __init__(self, *args, **kwargs):
-        # Load DFT parameters
-        self.n_dims = kwargs.get("n_dims")
-        # Load simulations parameters
-        self.timesteps = kwargs.get("timesteps", 100)
-        self.alpha = kwargs.get("alpha", 0.0625)
-        self.time_step = 1
-        self.out_type = kwargs.get("out_type", "spike")
-        self.out_abs = kwargs.get("out_abs", False)
-        self.normalize = kwargs.get("normalize", False)
-        self.off_bins = kwargs.get("off_bins", 0)
-        self.debug = kwargs.get("debug", False)
-        # Load parent class
-        super().__init__(*args, **kwargs)
-        if self.out_type not in ["spike", "voltage"]:
-            raise ValueError(
-                    "{} not a valid value for 'out_type'".format(self.out_type)
-            )
-        # SNN population variables
-        self.spikes = np.zeros(self.layer_dim)
-        self.voltage = np.zeros((2*self.timesteps,) + self.layer_dim)
-        # Initialize SNN and its connections
-        self.calculate_weights()
-        v_th = self.alpha*0.25*self.weights[0].sum()*self.timesteps
-        # Charge-and-spike neuron parameters
-        self.neuron_params = {}
-        self.neuron_params["threshold"] = v_th
-        self.neuron_params["t_silent"] = self.timesteps
-        self.neuron_params["i_offset"] =2*v_th // (self.timesteps/2)
-        # TODO: move here self.init_snn()
 
-    def calculate_out_shape(self):
-        """
-        Split in imag and real components. Only half spectrum is useful
-        """
-        self.out_data_shape = self.in_data_shape[:-1]
-        self.out_data_shape += (int(self.in_data_shape[-1]/2)-self.off_bins, )
-        if not self.out_abs:
-            self.out_data_shape += (2, )
-        self.layer_dim = self.in_data_shape[:-1] + (int(self.in_data_shape[-1]/2), 2)
+def parse_txt_data(fname, N, T):
+    with open(fname, "r") as f:
+        a = f.read()
+    data_list = [int(x) for x in a.split(",")]
+    data_array = np.array(data_list)
+    spike_array = np.zeros((N, T))
+    for i in range(N):
+        spike_array[i][data_array[i]] = 1
+    return data_array, spike_array
 
-    def calculate_weights(self):
-        """
-        Calculate the weights based on the DFT equation
-        """
-        c = 2 * np.pi/self.in_data_shape[-1]
-        n = np.arange(self.in_data_shape[-1]).reshape(self.in_data_shape[-1], 1)
-        k = np.arange(self.in_data_shape[-1]).reshape(1, self.in_data_shape[-1])
-        trig_factors = np.dot(n, k) * c
-        real_weights = np.cos(trig_factors)[:self.layer_dim[-2]]
-        imag_weights = -np.sin(trig_factors)[:self.layer_dim[-2]]
-        # Normalize for the allowed range in SpiNNaker
-        self.weights_re = real_weights*127
-        self.weights_im = imag_weights*127
-        self.weights = np.vstack((self.weights_re, self.weights_im))
-        self.weights = self.weights.astype(np.int8)
 
-    def init_snn(self, spike_in):
-        """
-        Initializes compartments depending on the number of samples
-        """
-        # Create neuron populations' instances
-        self.sg = SpikeGenerator(data=spike_in)
-        self.py2nx = PyToNxAdapter(shape=(self.in_data_shape[-1], ))
-        self.dense1 = Dense(weights=self.weights)
-        self.tcbs = TCBS(
-            shape=(self.in_data_shape[-1],),
-            t_half=self.neuron_params["t_silent"],
-            vth=self.neuron_params["threshold"],
-            charging_bias=self.neuron_params["i_offset"]
-        )
-        self.dense2 = Dense(weights=np.eye(self.in_data_shape[-1]))
-        self.nx2py = NxToPyAdapter(shape=(self.in_data_shape[-1], ))
-        self.sink = Sink(
-            shape=(self.in_data_shape[-1], ),
-            buffer=2*self.timesteps
-        )
+def parse_out_data(spike_train, T):
+    spike_times =  np.argmax(spike_train, axis=1)
+    formatted_spike_times = 0.75*T - spike_times
+    sft = np.sqrt(formatted_spike_times[1:128]**2 + formatted_spike_times[129:]**2)
+    np.save("spike_times.npy", spike_times)
+    np.save("sft.npy", sft)
+    return sft
 
-        # Interconnect populations
-        self.sg.s_out.connect(self.py2nx.inp)
-        self.py2nx.out.connect(self.dense1.s_in)
-        self.dense1.a_out.connect(self.tcbs.a_in)
-        self.tcbs.s_out.connect(self.dense2.s_in)
-        self.dense2.s_in.connect(self.nx2py.inp)
-        self.nx2py.out.connect(self.sink.a_in)
-        return
 
-    def simulate(self, spike_times):
-        """
-        Run the S-DFT over the total simulation time
-        """
-        # if self.debug:
+def plot_results(sft, in_data):
+    fft = np.fft.fft(in_data)
+    fft_abs = np.abs(fft[1:127])
+    fig, ax = plt.subplots(2)
+    ax[0].plot(fft_abs, color="cornflowerblue")
+    ax[1].plot(sft, color="cornflowerblue")
+    ax[0].set_title("FFT")
+    ax[0].set_yticks([])
+    ax[1].set_title("Spiking FT")
+    ax[1].set_yticks([])
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['top'].set_visible(False)
+    ax[1].spines['right'].set_visible(False)
+    ax[1].spines['top'].set_visible(False)
+    plt.tight_layout()
+    fig.savefig("ft_plot.pdf")
+
+
+def main(N=256, T=200, SFT=True, profile=False):
+
+    if not SFT:
+        bias=200
+        spike_in = np.zeros((N, T))
+        spike_in[:, :T//2] = np.eye(N)
+        # spike_in[:N//2, 0] = 1
+        # spike_in[N//2:, 1] = 1
+        # vth = 1
+        alpha = 0.5
+        vth = bias * T//2
+        weights = np.eye(N)*100
+        vth = alpha*0.25*weights[0].sum()*T
+    else:
+        data_in, spike_in = parse_txt_data("data/freq500Hz_narrow.txt", N, T)
+        # vth = bias * T//2
+        weights = calculate_weights(N)
+        alpha = 0.25
+        vth = alpha*0.25*weights[0].sum()*T
+        bias = 4*vth / T
+
+    # Create neuron populations' instances
+    sg = SpikeGenerator(data=spike_in)
+    py2nx = PyToNxAdapter(shape=(N, ))
+    dense1 = Dense(weights=weights)
+    lif1 = TCBS(shape=(N,), t_half=T//2, vth=vth, charging_bias=bias)
+    dense2 = Dense(weights=np.eye(N))
+    nx2py = NxToPyAdapter(shape=(N, ))
+    sink = Sink(shape=(N, ), buffer=T)
+
+    # Interconnect populations
+    sg.s_out.connect(py2nx.inp)
+    py2nx.out.connect(dense1.s_in)
+    dense1.a_out.connect(lif1.a_in)
+    lif1.s_out.connect(dense2.s_in)
+    dense2.s_in.connect(nx2py.inp)
+    nx2py.out.connect(sink.a_in)
+
+    if profile:
+        run_config = Loihi2HwCfg()
+        profiler = Profiler.init(run_config)
+        # profiler.energy_probe(num_steps=T)
+        # profiler.activity_probe()
+        # profiler.memory_probe()
+        profiler.execution_time_probe(num_steps=T)
+    else:
         probes = Probes()
         run_config = Loihi2HwCfg(callback_fxs=[probes],)
-        self.tcbs.run(
-            condition=RunSteps(num_steps=2*self.timesteps),
-            run_cfg=run_config
-        )
-        self.spikes = self.sink.data.get()
-        self.tcbs.stop()
-        return
-    
-    def format_input(self, in_data):
-        """
-        Convert the input to a binary spike train per input neuron
-        """
-        spike_array = np.zeros((self.in_data_shape[-1], 2*self.timesteps))
-        for i in range(self.in_data_shape[-1]):
-            spike_array[i][in_data[i]] = 1 
-        return spike_array       
 
-    def format_output(self, spikes):
-        """
-        Tranform output dictionary into output data array
-        """
-        spike_times =  np.argmax(spikes, axis=1)
-        # All neurons that didn't spike are forced to spike in the last step,
-        # since the spike-time of 1 corresponds to the lowest possible value.
-        spikes_all = np.where(spike_times == 0, 2*self.timesteps, spike_times)
-        # Decode from TTFS spikes to input data format
-        output = 1.5*self.timesteps - spikes_all.reshape(self.layer_dim)
-        output = output[..., self.off_bins:,:]
-        if self.out_abs:
-            output = np.sqrt(output[..., 0]**2 + output[..., 1]**2)
-        if self.normalize:
-            output = output - output.min()
-            output /= output.max()
-        return output
+    lif1.run(condition=RunSteps(num_steps=T), run_cfg=run_config)
+
+    if not profile:
+        spike_out = sink.data.get()
+        print("Sent spikes:", sg.data.get(), "\nReceived spikes:", spike_out)
+        print("Currents:\n {}".format(lif1.u.get()))
+        print("Voltages:\n {}".format(lif1.v.get()))
+    lif1.stop()
+
+    if profile:
+        print(f"Total execution time: {np.round(np.sum(profiler.execution_time), 6)} s")
+        # print(f"Total power: {np.round(profiler.power, 6)} W")
+        # print(f"Total energy: {np.round(profiler.energy, 6)} J")
+        # print(f"Static energy: {np.round(profiler.static_energy, 6)} J")
+    else:
+        sft = parse_out_data(spike_out, T)
+        plot_results(sft, data_in)
+    print("DONE")
 
 
-    def _run(self, in_data):
-        spike_in = self.format_input(in_data)
-        self.init_snn(spike_in)
-        # Run SNN
-        self.simulate(spike_in)
-        # Fetch  and format SNN output
-        output = self.format_output(self.spikes)
-        return output
+if __name__ == "__main__":
+    main()

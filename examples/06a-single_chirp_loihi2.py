@@ -62,13 +62,14 @@ def run(raw_data, timesteps, out_type, title, off_bins=4):
     return (s_dft_out, fft_out, voltages)
 
 
-def plot_voltages(voltages):
+def plot_voltages(voltages, timesteps):
     for i in range (voltages.shape[-2]-4):
         plt.plot(voltages[:, i+4, 0])
         plt.plot(voltages[:, i+4, 0])
     plt.show()
-    plt.plot(voltages[300, :, 0])
-    plt.plot(voltages[300, :, 1])
+    plt.plot(voltages[timesteps, :, 0])
+    plt.plot(voltages[timesteps, :, 1])
+    plt.savefig("results/loihi2_sft_voltages.eps")
     plt.show()
 
 def plot_ft_components(ft_re, ft_im, ft_abs, timesteps):
@@ -81,11 +82,12 @@ def plot_ft_components(ft_re, ft_im, ft_abs, timesteps):
     axs[2].plot(ft_abs)
     axs[2].set_title("Modulus")
     plt.tight_layout()
+    plt.savefig("results/loihi2_sft_components.eps")
     plt.show()
     return
 
 def main(
-        timesteps=300,
+        timesteps=100,
         plot=True,
         out_type="spike",
         source="special_cases"
@@ -109,7 +111,7 @@ def main(
     axs[1].plot(s_dft_abs)
     fig.savefig("results/loihi2_sft.eps")
     plt.show()
-    plot_voltages(voltages)
+    plot_voltages(voltages, timesteps)
     plot_ft_components(s_dft_out[:,0], s_dft_out[:, 1], s_dft_abs, timesteps)
     return
 

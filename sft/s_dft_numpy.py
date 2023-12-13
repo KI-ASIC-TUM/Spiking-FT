@@ -39,8 +39,8 @@ class SDFT(pyrads.algorithm.Algorithm):
         # Charge-and-spike neuron parameters
         self.neuron_params = {}
         self.neuron_params["threshold"] = v_th
-        self.neuron_params["t_silent"] = self.timesteps // 2
-        self.neuron_params["i_offset"] =2*v_th // (self.timesteps/2)
+        self.neuron_params["t_silent"] = self.timesteps
+        self.neuron_params["i_offset"] =2*v_th // self.timesteps
         self.l1 = self.init_snn()
 
     def calculate_out_shape(self):
@@ -95,7 +95,7 @@ class SDFT(pyrads.algorithm.Algorithm):
             counter += 1
         # Spiking stage
         self.l1.spiking = True
-        self.l1.bias = 2*self.neuron_params["threshold"] / self.timesteps
+        self.l1.bias = self.neuron_params["i_offset"]
         causal_neurons = np.zeros_like(causal_neurons)
         while counter < 2*self.timesteps:
             current_time = counter * self.time_step
@@ -184,10 +184,16 @@ class SpikingNeuralLayer():
         """
         self.v_membrane += z
         self.v_membrane *= (1-self.refactory)
+        # Force a saturation point at vth and -vth
         if not self.spiking:
             self.v_membrane = np.where(
                 (self.v_membrane>self.v_threshold),
                 self.v_threshold,
+                self.v_membrane
+            )
+            self.v_membrane = np.where(
+                (self.v_membrane<-self.v_threshold),
+                -self.v_threshold,
                 self.v_membrane
             )
         return self.v_membrane
