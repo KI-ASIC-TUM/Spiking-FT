@@ -64,8 +64,8 @@ class Probes(NxSdkCallbackFx):
     def post_run_callback(self, board, var_id_to_model_map):
         np.save("probe_u.npy", self.u_probes[0].data)
         np.save("probe_v.npy", self.v_probes[0].data)
-        print("LIF-post u", self.u_probes[0].data)
-        print("LIF-post v", self.v_probes[0].data)
+        # print("LIF-post u", self.u_probes[0].data)
+        # print("LIF-post v", self.v_probes[0].data)
 
 
 class TCBS(AbstractLIF):
@@ -214,7 +214,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.n_dims = kwargs.get("n_dims")
         # Load simulations parameters
         self.timesteps = kwargs.get("timesteps", 100)
-        self.alpha = kwargs.get("alpha", 0.0625)
+        self.alpha = kwargs.get("alpha", 0.4)
         self.time_step = 1
         self.out_type = kwargs.get("out_type", "spike")
         self.out_abs = kwargs.get("out_abs", False)
@@ -232,12 +232,12 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.voltage = np.zeros((2*self.timesteps,) + self.layer_dim)
         # Initialize SNN and its connections
         self.calculate_weights()
-        v_th = self.alpha*0.25*self.weights[0].sum()*self.timesteps
+        v_th = self.alpha*0.25*self.weights_re[0].sum()*self.timesteps
         # Charge-and-spike neuron parameters
         self.neuron_params = {}
         self.neuron_params["threshold"] = v_th
         self.neuron_params["t_silent"] = self.timesteps
-        self.neuron_params["i_offset"] =2*v_th // (self.timesteps/2)
+        self.neuron_params["i_offset"] = 2*v_th // self.timesteps
         # TODO: move here self.init_snn()
 
     def calculate_out_shape(self):
@@ -308,17 +308,18 @@ class SDFT(pyrads.algorithm.Algorithm):
             run_cfg=run_config
         )
         self.spikes = self.sink.data.get()
+        self.voltages = self.tcbs.v.get()
         self.tcbs.stop()
         return
-    
+
     def format_input(self, in_data):
         """
         Convert the input to a binary spike train per input neuron
         """
         spike_array = np.zeros((self.in_data_shape[-1], 2*self.timesteps))
         for i in range(self.in_data_shape[-1]):
-            spike_array[i][in_data[i]] = 1 
-        return spike_array       
+            spike_array[i][in_data[i]] = 1
+        return spike_array
 
     def format_output(self, spikes):
         """
@@ -328,8 +329,12 @@ class SDFT(pyrads.algorithm.Algorithm):
         # All neurons that didn't spike are forced to spike in the last step,
         # since the spike-time of 1 corresponds to the lowest possible value.
         spikes_all = np.where(spike_times == 0, 2*self.timesteps, spike_times)
+        reshaped_spikes = np.vstack((
+            spikes_all[:self.layer_dim[-2]],
+            spikes_all[self.layer_dim[-2]:]
+        )).transpose()
         # Decode from TTFS spikes to input data format
-        output = 1.5*self.timesteps - spikes_all.reshape(self.layer_dim)
+        output = 1.5*self.timesteps - reshaped_spikes.reshape(self.layer_dim)
         output = output[..., self.off_bins:,:]
         if self.out_abs:
             output = np.sqrt(output[..., 0]**2 + output[..., 1]**2)

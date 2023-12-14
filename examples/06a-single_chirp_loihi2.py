@@ -79,6 +79,7 @@ def plot_ft_components(ft_re, ft_im, ft_abs, timesteps):
     axs[0].set_ylim([-0.5*timesteps, 0.5*timesteps])
     axs[1].plot(ft_im)
     axs[1].set_title("Imaginary component")
+    axs[1].set_ylim([-0.5*timesteps, 0.5*timesteps])
     axs[2].plot(ft_abs)
     axs[2].set_title("Modulus")
     plt.tight_layout()
