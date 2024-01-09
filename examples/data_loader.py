@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Basic example with BBM data
+Utility functions for the examples
 """
 # Standard libraries
 import matplotlib.pyplot as plt
@@ -11,28 +11,8 @@ import pyrads.algms.dbscan
 import pyrads.algms.fft
 import pyrads.algms.os_cfar
 import pyrads.pipeline
-import sft.encoder
-import sft.preproc_pipeline
-import sft.s_dft_numpy
 import sft.utils.metrics
-import data_loader
 
-
-plt.rcParams.update({
-    "font.family": "serif",  # use serif/main font for text elements
-    "text.usetex": True,     # use inline math for ticks
-    'axes.unicode_minus': False,
-    # Use 10pt font in plots, to match 10pt font in document
-    "axes.labelsize": 10,
-    "axes.titlesize": 12,
-    "font.size": 10,
-    # Make the legend/label fonts a little smaller
-    "legend.fontsize": 10,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "axes.spines.right": False,
-    "axes.spines.top": False
-    })
 
 # Radar configuration in the BBM simulator
 config = {
@@ -66,6 +46,23 @@ dbscan_params = {
 }
 
 
+def load_bbm_chirp(target, noise):
+    """
+    Load chirp from BBM dataset
+    """
+    root_path = "data/BBM_{}_{}".format(target, noise)
+    data_path = "{}/data.mat".format(root_path)
+    targets_path = "{}/targets.mat".format(root_path)
+    data_dict = scipy.io.loadmat(data_path)
+    targets_dict = scipy.io.loadmat(targets_path)
+    data = data_dict["data"]
+    targets = targets_dict["targets"]
+    targets_list = []
+    for i in range(targets.size):
+        targets_list.append(targets[0,0,i][1])
+    return data, targets_list
+
+
 def get_range_labels(n_distances=None):
     """
     Extract range labels from radar parameters
@@ -82,52 +79,7 @@ def get_range_labels(n_distances=None):
     return distance_range
 
 
-def mean_shift(data, axis=-1):
-    data = data - np.expand_dims(np.mean(data,axis=axis),axis=axis)
-    return data
-
-
-def classic(chirp_n=0):
-    """
-    Implementation of FFT without pyradSP library
-    """
-    chirp, targets = data_loader.load_bbm_chirp(chirp_n)
-    target_range = targets[chirp_n]
-    
-    zeroed = mean_shift(chirp)
-    window = np.hanning(512)
-    windowed = window * zeroed
-    fft = np.fft.fft(windowed)
-
-    print("Target distance: {}".format(target_range[0][0]))
-    ft_plotter(fft)
-
-
-def ft_plotter(fft):
-    """
-    Generate plot of the FT
-    """
-    range_labels = get_range_labels()
-    plt.plot(range_labels[1:], np.abs(fft[1:256]))
-    plt.show()
-
-
-def cfar_plotter(fft, cfar):
-    """
-    Generate a plot of the FT and CFAR detections on top
-    """
-    # Get range labels for FT spectrum
-    range_labels = get_range_labels()
-    # Calculate ratio between max range and max bin
-    ratio = range_labels[-1] / 256
-    plt.plot(range_labels[1:], np.abs(fft[1:256]))
-    targets = np.where(cfar)[-1]
-    for target in targets:
-        plt.axvline(x=target*ratio, color="orange", linestyle="--")
-    plt.show()
-
-
-def cluster_plotter(fft, clusters, ax=None, title=""):
+def cluster_plotter(fft, clusters, off_bins, ax=None, title=""):
     """
     Generate a plot of the FT and CFAR detections on top
     """
@@ -154,7 +106,7 @@ def cluster_plotter(fft, clusters, ax=None, title=""):
     ax.set_title(title)
 
 
-def voltage_plotter(voltages, ax=None):
+def voltage_plotter(voltages, off_bins, ax=None):
     """
     Generate a plot of the SNN voltages over time
     """
@@ -179,84 +131,7 @@ def voltage_plotter(voltages, ax=None):
     ax.set_title("S-FT voltages")
 
 
-def performance_plotter(
-        snn_prec,
-        snn_rec,
-        std_prec,
-        std_rec,
-        errors,
-        timesteps,
-        title,
-        boxplot=True,
-        plot_rmse_mean=True,
-        show=False,
-        outliers=False
-    ):
-    latex_w = 2.5
-    latex_h = latex_w * 0.7
-    fig = plt.figure(figsize=(latex_w, latex_h))
-    plt.plot(timesteps, snn_prec, color="cornflowerblue", label="Precision")
-    plt.plot(timesteps, snn_rec, color="red", label="Recall")
-    plt.title(title)
-    plt.ylim((0.3, 1.05))
-    plt.yticks(np.arange(0.4, 1.1, 0.1))
-    plt.legend()
-    plt.axhline(y=std_prec, color="lightblue", linestyle="--")
-    plt.axhline(y=std_rec, color="orange", linestyle="--")
-    plt.xlabel("S-FT timesteps")
-    fig.tight_layout()
-    plt.savefig("results/performance_{}.eps".format(title))
-    plt.savefig("results/performance_{}.pdf".format(title), dpi=300)
-    if show:
-        plt.show()
-    else:
-        plt.clf()
-    if boxplot:
-        # Plot errors boxplots
-        fig = plt.figure(figsize=(latex_w, latex_h))
-        if outliers:
-            plt.boxplot(
-                errors,
-                positions=timesteps,
-                widths=12,
-                flierprops={'marker': '+', 'markersize': 3}
-            )
-        else:
-            plt.boxplot(
-                errors,
-                positions=timesteps,
-                widths=12,
-                showfliers=False
-            )
-        plt.title(title)
-        plt.ylim((0.0, 0.7))
-        plt.yticks(np.arange(0.1, 0.8, 0.1))
-        plt.xticks(np.arange(100, 300, 100), [100, 200])
-        # plt.legend()
-        plt.xlabel("S-FT timesteps")
-        fig.tight_layout()
-        plt.savefig("results/rmse_boxplot_{}.eps".format(title))
-        plt.savefig("results/rmse_boxplot_{}.pdf".format(title), dpi=300)
-    if plot_rmse_mean:
-        # Plot errors mean
-        errors_mean = np.array(errors).mean(axis=1)
-        fig = plt.figure(figsize=(latex_w, latex_h))
-        plt.plot(timesteps, errors_mean, color="cornflowerblue", label="RMSE")
-        plt.title(title)
-        plt.ylim((0.025, 0.21))
-        plt.yticks(np.arange(0.04, 0.24, 0.04))
-        # plt.legend()
-        plt.xlabel("S-FT timesteps")
-        fig.tight_layout()
-        plt.savefig("results/rmse_{}.eps".format(title))
-        plt.savefig("results/rmse_{}.pdf".format(title), dpi=300)
-    if show:
-        plt.show()
-    else:
-        plt.clf()
-
-
-def run_std(raw_data):
+def run_std(raw_data, dataset="unknown", subdata="", id=0):
     """
     Run pipeline with standard algorithms on the input data
     """
@@ -281,10 +156,19 @@ def run_std(raw_data):
     fft = std_pipeline.output[-3]
     cfar = std_pipeline.output[-2]
     clusters = std_pipeline.output[-1]
+    np.save("results/{}/{}_{}_std.npy".format(dataset, subdata, id), fft)
     return fft, cfar, clusters
 
 
-def run_snn(raw_data, timesteps=100):
+def run_snn(
+        raw_data,
+        off_bins,
+        source,
+        timesteps=100,
+        dataset="unknown",
+        subdata="",
+        id=0
+    ):
     """
     Run pipeline with spiking FT on the input data
 
@@ -310,7 +194,10 @@ def run_snn(raw_data, timesteps=100):
         "out_abs": True
     }
     encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
-    s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
+    if source=="numpy":
+        s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
+    elif source=="loihi2":
+        s_dft = sft.s_dft_loihi2.SDFT(encoder.out_data_shape, **sft_params)
     spinn_oscfar = pyrads.algms.os_cfar.OSCFAR(
         s_dft.out_data_shape,
         **oscfar_params
@@ -328,21 +215,44 @@ def run_snn(raw_data, timesteps=100):
     sft_out = spinn_pipeline.output[-3]
     cfar_out = spinn_pipeline.output[-2]
     dbscan_out = spinn_pipeline.output[-1]
+    np.save(
+        "results/{}/{}_{}_{}.npy".format(dataset, subdata, id, source),
+        sft_out
+    )
     return sft_out, voltages, cfar_out, dbscan_out
 
 
 def experiment_single_chirp(
         raw_data,
         targets,
+        source="numpy",
         timesteps=100,
         plot=True,
-        print_metrics=True
+        print_metrics=True,
+        dataset="BBM",
+        subdata="car_highnoise",
+        id=0
     ):
     """
     Run FFT and SFT on a single radar chirp
+
+    str source: numpy | loihi2
     """
-    fft, cfar, clusters = run_std(raw_data)
-    snn, voltages, scfar, sclusters = run_snn(raw_data, timesteps=timesteps)
+    fft, cfar, clusters = run_std(
+        raw_data,
+        dataset,
+        subdata,
+        id
+    )
+    snn, voltages, scfar, sclusters = run_snn(
+        raw_data,
+        off_bins,
+        source,
+        timesteps,
+        dataset,
+        subdata,
+        id
+    )
     # Print distance to target
     target_range = targets[0][0]
     target = [target_range]
@@ -366,28 +276,42 @@ def experiment_single_chirp(
         latex_w = 5
         latex_h = latex_w
         fig, axs = plt.subplots(3, layout="constrained", figsize=(latex_w, latex_h))
-        cluster_plotter(fft, clusters, axs[0], "FFT")
-        cluster_plotter(snn, sclusters, axs[1], "S-FT")
-        voltage_plotter(voltages, axs[2])
+        cluster_plotter(fft, clusters, off_bins, axs[0], "FFT")
+        cluster_plotter(snn, sclusters, off_bins, axs[1], "S-FT")
+        voltage_plotter(voltages, off_bins, axs[2])
         plt.savefig("results/sft_single_chirp_simulation.pdf", dpi=300)
         plt.show()
     return (std_prec, std_rec, snn_prec, snn_rec, rmse)
 
 
-def run_batch(data, targets_list, timesteps=100, print_metrics=False):
+def run_batch(
+        data,
+        targets_list,
+        timesteps=100,
+        source="numpy",
+        print_metrics=False,
+        dataset="unknown",
+        subdata=""
+    ):
     """
     Run FFT and SFT for all scenes for a specific SFT configuration
     """
     n_scenes = len(targets_list)
     std_prec  = std_rec  = snn_prec  = snn_rec  = 0
     rmse = []
+    print("Running {} iterations".format(n_scenes))
     for chirp_n in range(n_scenes):
+        print("Starting iteration {}".format(chirp_n+1))
         _std_prec, _std_rec, _snn_prec, _snn_rec, _rmse = experiment_single_chirp(
             data[:, 0, 0, chirp_n],
             targets_list[chirp_n],
+            source,
             timesteps=timesteps,
             plot=False,
-            print_metrics=False
+            print_metrics=False,
+            dataset=dataset,
+            subdata=subdata,
+            id=chirp_n
         )
         std_prec += _std_prec
         std_rec += _std_rec
@@ -399,6 +323,7 @@ def run_batch(data, targets_list, timesteps=100, print_metrics=False):
     snn_prec /= n_scenes
     snn_rec /= n_scenes
     rmse = np.array(rmse)
+    np.save("results/rmse_{}.npy".format(source), rmse)
     rmse_dist = np.array((rmse.mean(), rmse.std()))
     if print_metrics:
         print("std pipeline precision: {}".format(std_prec))
@@ -407,48 +332,3 @@ def run_batch(data, targets_list, timesteps=100, print_metrics=False):
         print("SNN pipeline recall: {}".format(snn_rec))
         print("Root mean squared error: {}".format(rmse_dist[0]))
     return (std_prec, std_rec, snn_prec, snn_rec, rmse)
-
-
-def single_run(data, targets, timesteps):
-    """
-    Run the scenes for a single SFT configuration
-    """
-    run_batch(data, targets, timesteps, print_metrics=True)
-
-
-def multiple_runs(data, targets, title="car_no_noise"):
-    """
-    Run the scenes for different SFT configurations
-    """
-    snn_rec = []
-    snn_prec = []
-    timesteps = []
-    errors = []
-    for n in range(30, 290, 20):
-        std_prec, std_rec, snn_prec_, snn_rec_, err = run_batch(data, targets, n)
-        snn_prec.append(snn_prec_)
-        snn_rec.append(snn_rec_)
-        errors.append(err)
-        timesteps.append(n)
-    performance_plotter(snn_prec, snn_rec, std_prec, std_rec, errors, timesteps, title)
-
-
-def main(target="car", noise="highnoise"):
-    # Plot the result for a single chirp and SFT configuration
-    data, targets = data_loader.load_bbm_chirp(target, noise)
-    experiment_single_chirp(data[:, 0, 0, 40],
-            targets[40],
-            timesteps=100,
-        )
-    single_run(data, targets, timesteps=160)
-
-    # Run the SFT for different configurations and datasets
-    for target in ["car", "pedestrian"]:
-        for noise in ["lownoise", "highnoise"]:
-            data, targets = data_loader.load_bbm_chirp(target, noise)
-            title = "{}_{}".format(target, noise)
-            multiple_runs(data, targets, title)
-
-
-if __name__ == "__main__":
-    main()
