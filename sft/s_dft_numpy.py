@@ -41,6 +41,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         self.neuron_params["threshold"] = v_th
         self.neuron_params["t_silent"] = self.timesteps
         self.neuron_params["i_offset"] =2*v_th // self.timesteps
+        self.neuron_params["strict_silent"] = kwargs.get("strict_silent", True)
         self.l1 = self.init_snn()
 
     def calculate_out_shape(self):
@@ -77,6 +78,12 @@ class SDFT(pyrads.algorithm.Algorithm):
                 v_threshold=self.neuron_params["threshold"],
                 time_step=1
         )
+        # If the simulation of the silent stage is strict,
+        # spikes are not allowed until reaching spiking stage
+        if self.neuron_params["strict_silent"]:
+            l1.spiking = False
+        else:
+            l1.spiking = True
         return l1
 
     def simulate(self, spike_times):
