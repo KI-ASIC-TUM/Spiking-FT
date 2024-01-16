@@ -31,6 +31,7 @@ fft_params = {
     "type": "range",
     "out_format": "modulus",
     "normalize": True,
+    # "unitary": True,
     "off_bins": off_bins,
 }
 encoder_params = {
@@ -41,6 +42,7 @@ encoder_params = {
 }
 sft_params = {
     "n_dims": 1,
+    "alpha": 0.4,
     "timesteps": timesteps,
     "out_type": "spike",
     "off_bins": off_bins,
@@ -61,9 +63,9 @@ def run_snn(raw_data, platform):
     pre_pipeline = sft.preproc_pipeline.PreprocPipeline(fft_shape)
     # Create algorithms and main pipeline instances
     encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
-    if platform is "loihi":
+    if platform == "loihi":
         s_dft = sft.s_dft_loihi2.SDFT(encoder.out_data_shape, **sft_params)
-    elif platform is "numpy":
+    elif platform == "numpy":
         s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
     else:
         raise ValueError("'{}' is not a valid platform".format(platform))
@@ -130,6 +132,25 @@ def get_errors(data, init_chirp, end_chirp, title, platform):
         rmse.append(sft.utils.metrics.get_rmse(std_ft, snn_ft))
     return rmse
 
+
+def spectrum_plotter(data, init_chirp, end_chirp, title):
+    for chirp_n in range(init_chirp, end_chirp):
+        std_ft = run_std(data[:, 0, 0, chirp_n])
+        np_path = Path("results/numpy/sft_{}_{}.npy".format(title, chirp_n))
+        np_data = np.load(np_path)
+        loihi_path = Path("results/loihi/sft_{}_{}.npy".format(title, chirp_n))
+        loihi_data = np.load(loihi_path)
+        _, axs = plt.subplots(3)
+        axs[0].plot(std_ft)
+        axs[0].set_title("FFT")
+        axs[1].plot(np_data)
+        axs[1].set_title("NumPy S-FT")
+        axs[2].plot(loihi_data)
+        axs[2].set_title("Loihi S-FT")
+        plt.tight_layout()
+        plt.show()
+
+
 def plotter(errors, init_chirp, end_chirp, subdata):
     latex_w = 5
     latex_h = latex_w
@@ -140,6 +161,7 @@ def plotter(errors, init_chirp, end_chirp, subdata):
         showfliers=False
     )
     plt.xticks([1, 2], ["loihi", "numpy"])
+    plt.savefig("results/platform_comparison_boxplot.eps")
     plt.show()
     pass
 
@@ -156,6 +178,9 @@ def main(target="car", noise="highnoise", init_chirp=30, end_chirp=50):
     # Compute and plot performance
     errors_loihi = get_errors(data, init_chirp, end_chirp, subdata, "loihi")
     errors_numpy = get_errors(data, init_chirp, end_chirp, subdata, "numpy")
+    print("Errors Loihi: {}".format(errors_loihi))
+    print("Errors numpy: {}".format(errors_numpy))
+    # spectrum_plotter(data, init_chirp, end_chirp, subdata)
     plotter([errors_loihi, errors_numpy], init_chirp, end_chirp, subdata)
     return
 

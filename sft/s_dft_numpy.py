@@ -38,9 +38,9 @@ class SDFT(pyrads.algorithm.Algorithm):
         v_th = self.alpha*0.25*self.weights_re[0].sum()*self.timesteps
         # Charge-and-spike neuron parameters
         self.neuron_params = {}
-        self.neuron_params["threshold"] = v_th
+        self.neuron_params["threshold"] = v_th.astype(np.int32)
         self.neuron_params["t_silent"] = self.timesteps
-        self.neuron_params["i_offset"] =2*v_th // self.timesteps
+        self.neuron_params["i_offset"] = (2*v_th // self.timesteps).astype(np.int16)
         self.neuron_params["strict_silent"] = kwargs.get("strict_silent", True)
         self.l1 = self.init_snn()
 
@@ -64,9 +64,9 @@ class SDFT(pyrads.algorithm.Algorithm):
         trig_factors = np.dot(n, k) * c
         real_weights = np.cos(trig_factors)[:self.layer_dim[-2]]
         imag_weights = -np.sin(trig_factors)[:self.layer_dim[-2]]
-        # Normalize for the allowed range in SpiNNaker
-        self.weights_re = real_weights*127
-        self.weights_im = imag_weights*127
+        # Scale to the range in Loihi and SpiNNaker
+        self.weights_re = (real_weights*127).astype(np.int16)
+        self.weights_im = (imag_weights*127).astype(np.int16)
 
     def init_snn(self):
         """
@@ -160,12 +160,12 @@ class SpikingNeuralLayer():
         self.v_threshold = kwargs.get("v_threshold", 0.05)
         self.spiking = False
         # Neuron variables
-        self.v_membrane = np.zeros(shape)
+        self.v_membrane = np.zeros(shape, dtype=np.int32)
         self.spikes = np.zeros(shape)
-        self.refactory = np.zeros(shape)
+        self.refactory = np.zeros(shape, dtype=np.int32)
         self.weights = weights
 
-        # Simulation parametersupdate_input_currents
+        # Simulation parameters
         self.time_step = kwargs.get("time_step", 0.001)
 
     def update_input_currents(self, input_spikes):
