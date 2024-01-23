@@ -180,7 +180,7 @@ def plotter(errors, init_chirp, end_chirp, subdata):
     pass
 
 
-def main(target="car", noise="highnoise", init_chirp=30, end_chirp=31, crop_chirp=True):
+def main(target="car", noise="highnoise", init_chirp=30, end_chirp=50, crop_chirp=True):
     # Load data
     data, targets = data_loader.load_bbm_chirp(target, noise)
     # Reduce chirp size to half. Required for running it on the SpiNNaker 2 platform
@@ -193,14 +193,14 @@ def main(target="car", noise="highnoise", init_chirp=30, end_chirp=31, crop_chir
         run_batch(data, init_chirp, end_chirp, subdata, platform)
 
     # Compute and plot performance
-    # errors_loihi = get_errors(data, init_chirp, end_chirp, subdata, "loihi")
+    errors_loihi = get_errors(data, init_chirp, end_chirp, subdata, "loihi")
     errors_spinnaker = get_errors(data, init_chirp, end_chirp, subdata, "spinnaker")
     errors_numpy = get_errors(data, init_chirp, end_chirp, subdata, "numpy")
-    # print("Errors Loihi: {}".format(errors_loihi))
+    print("Errors Loihi: {}".format(errors_loihi))
     print("Errors spinnaker: {}".format(errors_spinnaker))
     print("Errors numpy: {}".format(errors_numpy))
     # spectrum_plotter(data, init_chirp, end_chirp, subdata)
-    plotter([errors_spinnaker, errors_numpy], init_chirp, end_chirp, subdata)
+    plotter([errors_loihi, errors_spinnaker, errors_numpy], init_chirp, end_chirp, subdata)
     return
 
 
