@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-Run OS-CFAR over test dataset
+Run spiking-ft for BBM data on SpiNNaker 2 and Loihi 2
+
+The script executes the S-FT chirp by chirp. The results are first saved
+on a local file, so in case execution is aborted it can be resumed from
+the last chirp it was computed.
+
+The script only works for the neuromorphic hw accessible locally and
+ignores it otherwise.
 """
 # Standard libraries
 from multiprocessing import Value
@@ -18,6 +25,11 @@ import data_loader
 import sft.s_dft_numpy
 try:
     import sft.s_dft_loihi2
+except ImportError:
+    print("Warning: Unable to load Loihi libraries")
+    pass
+try:
+    import sft.s_dft_spinnaker
 except ImportError:
     print("Warning: Unable to load Loihi libraries")
     pass
@@ -65,6 +77,8 @@ def run_snn(raw_data, platform):
     encoder = sft.encoder.Encoder(fft_shape, **encoder_params)
     if platform == "loihi":
         s_dft = sft.s_dft_loihi2.SDFT(encoder.out_data_shape, **sft_params)
+    elif platform == "spinnaker":
+        s_dft = sft.s_dft_spinnaker.SDFT(encoder.out_data_shape, **sft_params)
     elif platform == "numpy":
         s_dft = sft.s_dft_numpy.SDFT(encoder.out_data_shape, **sft_params)
     else:
@@ -166,22 +180,27 @@ def plotter(errors, init_chirp, end_chirp, subdata):
     pass
 
 
-def main(target="car", noise="highnoise", init_chirp=30, end_chirp=50):
+def main(target="car", noise="highnoise", init_chirp=30, end_chirp=31, crop_chirp=True):
     # Load data
     data, targets = data_loader.load_bbm_chirp(target, noise)
+    # Reduce chirp size to half. Required for running it on the SpiNNaker 2 platform
+    if crop_chirp:
+        data = data[::2,...]
     subdata = "{}_{}".format(target, noise)
 
     # Run experiment
-    for platform in ["loihi", "numpy"]:
+    for platform in ["loihi", "spinnaker", "numpy"]:
         run_batch(data, init_chirp, end_chirp, subdata, platform)
 
     # Compute and plot performance
-    errors_loihi = get_errors(data, init_chirp, end_chirp, subdata, "loihi")
+    # errors_loihi = get_errors(data, init_chirp, end_chirp, subdata, "loihi")
+    errors_spinnaker = get_errors(data, init_chirp, end_chirp, subdata, "spinnaker")
     errors_numpy = get_errors(data, init_chirp, end_chirp, subdata, "numpy")
-    print("Errors Loihi: {}".format(errors_loihi))
+    # print("Errors Loihi: {}".format(errors_loihi))
+    print("Errors spinnaker: {}".format(errors_spinnaker))
     print("Errors numpy: {}".format(errors_numpy))
     # spectrum_plotter(data, init_chirp, end_chirp, subdata)
-    plotter([errors_loihi, errors_numpy], init_chirp, end_chirp, subdata)
+    plotter([errors_spinnaker, errors_numpy], init_chirp, end_chirp, subdata)
     return
 
 
