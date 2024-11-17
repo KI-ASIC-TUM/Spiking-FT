@@ -55,8 +55,8 @@ class SDFT(pyrads.algorithm.Algorithm):
         # Charge-and-spike neuron parameters
         self.neuron_params = {}
         self.neuron_params["threshold"] = v_th
-        self.neuron_params["t_silent"] = self.timesteps // 2
-        self.neuron_params["i_offset"] =2*v_th // (self.timesteps/2)
+        self.neuron_params["t_silent"] = self.timesteps
+        self.neuron_params["i_offset"] =2*v_th // self.timesteps
         self.init_snn()
         self.create_projections()
         # Create network and add populations to it
@@ -136,9 +136,9 @@ class SDFT(pyrads.algorithm.Algorithm):
         """
         connections = []
         for idx_in in range(self.in_data_shape[-1]):
-            for idx_out in range(self.out_data_shape[-1]):
+            for idx_out in range(self.in_data_shape[-1]):
                 connections.append(
-                        [idx_in, idx_out, self.weights_re[idx_out, idx_in], 0]
+                        [idx_in, idx_out, self.weights[idx_out, idx_in], 0]
                 )
         return connections
 
@@ -161,7 +161,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         # Turn multiple-output lists into single-value array
         if self.out_type == "spike":
             filled_array = np.array([
-                    self.timesteps if not len(v) else v[0] for v in spike_list
+                    2*self.timesteps if not len(v) else v[0] for v in spike_list
             ])
         elif self.out_type == "voltage":
             filled_array = np.array([v[self.neuron_params["t_silent"]] for v in spike_list])
@@ -170,7 +170,7 @@ class SDFT(pyrads.algorithm.Algorithm):
             filled_array[:self.layer_dim[-2]],
             filled_array[self.layer_dim[-2]:]
         )).transpose()
-        output = 0.75*self.timesteps - reshaped_spikes.reshape(self.layer_dim)
+        output = 1.5*self.timesteps - reshaped_spikes.reshape(self.layer_dim)
         output = output[..., self.off_bins:,:]
         if self.out_abs:
             output = np.sqrt(output[..., 0]**2 + output[..., 1]**2)
@@ -181,7 +181,7 @@ class SDFT(pyrads.algorithm.Algorithm):
         # Write spike times into spike input population
         self.assign_input_spikes(in_data)
         # Run SNN on neuromorphic chip
-        self.hw.run(self.net, self.timesteps)
+        self.hw.run(self.net, 2*self.timesteps)
         # Fetch  and format SNN output
         if self.out_type == "spike":
             spikes = self.out_pop.get_spikes()
