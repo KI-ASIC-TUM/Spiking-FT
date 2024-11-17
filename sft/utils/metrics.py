@@ -44,14 +44,25 @@ def get_accuracy(signal, ref, simp=False):
 
 def get_precision(signal, ref, simp=False):
     """
-    Calculate the accuracy for a classification map
+    Calculate the precision for a classification map
 
     Both @signal and @ref must be bool numpy arrays of the same shape
     """
-    total_error = np.abs((signal.astype(np.int) - ref.astype(np.int))).sum()
-    rel_error = total_error / signal.size
-    precision = 1 - rel_error
+    true_positives = np.sum((signal == 1) & (ref == 1))
+    precision = true_positives / signal.sum()
     return precision
+
+
+def get_recall(signal, ref):
+    """
+    Calculate the recall for a classification map
+
+    Both @signal and @ref must be bool numpy arrays of the same shape
+    """
+    true_positives = np.sum((signal == 1) & (ref == 1))
+    false_negatives = np.sum((signal == 0) & (ref == 1))
+    recall = true_positives / (true_positives+false_negatives)
+    return recall
 
 
 def get_clustering_performance(clusters, targets, offset, ratio, tol=2):

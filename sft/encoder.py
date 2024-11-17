@@ -53,7 +53,7 @@ class Encoder(pyrads.algorithm.Algorithm):
         @param values: np.array / float / double to encode
         """
         encoded = self.t_min + (self.x_max - values) * self.scale_factor
-        encoded = encoded.astype(np.int)
+        encoded = encoded.astype(int)
         encoded = np.where(encoded<self.t_min, self.t_min, encoded)
         encoded = np.where(encoded>self.t_max, self.t_max, encoded)
         return encoded

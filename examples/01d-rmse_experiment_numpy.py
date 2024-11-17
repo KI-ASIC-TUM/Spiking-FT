@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run OS-CFAR over test dataset
+Compute the RMSE of the S-FT for different bin sizes and simulation times
 """
 # Standard libraries
 import time
@@ -75,7 +75,7 @@ def run_batch(raw_data, timesteps):
     for i in range(4):
         title = "TI_{}".format(i)
         s_dft_out, fft_out = run(raw_data[i], timesteps, "spike", title)
-        s_dft_out = s_dft_out[0,0,0,0,4:]
+        s_dft_out = s_dft_out[4:]
         # Measure RMSE
         rmse = sft.utils.metrics.get_rmse(s_dft_out, fft_out)
         rmse_avg += rmse
@@ -91,7 +91,7 @@ def run_experiment(raw_data, n_bins):
         step = 4
     elif n_bins == 1024:
         step = 1
-    raw_data = raw_data[:,:,:,:,:,::step]
+    raw_data = raw_data[:,::step]
     # Iterate for different simulation times
     errors = []
     for i in range(len(sim_times)):
@@ -105,29 +105,14 @@ def main(
         timesteps=300,
         plot=True,
         out_type="spike",
-        source="special_cases"
     ):
-    if source=="sample":
-        raw_data = np.load("data/sample_chirp.npy")
-    elif source=="special_cases":
-        raw_data = np.load("data/TI_radar/special_cases/data_tum.npy")
-        # reshape to standard data format
-        raw_data = raw_data.reshape((4, 1,1,1,1, 1024))
+    raw_data = np.load("data/TI_radar/special_cases/data_tum.npy")
 
     for n_bins in bin_sizes:
         run_experiment(raw_data, n_bins)
     plt.legend()
     plt.savefig("results/TI_rmse.eps")
     plt.show()
-
-
-        # axs[0].set_title("FFT")
-        # axs[0].plot(fft_data)
-        # axs[1].set_title("S-FT Numpy")
-        # axs[1].plot(s_dft_out)
-        # fig.savefig("results/TI_{}.eps".format(i))
-        # if plot:
-        #     plt.show()
     return
 
 

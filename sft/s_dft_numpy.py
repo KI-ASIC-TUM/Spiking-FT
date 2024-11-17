@@ -161,8 +161,8 @@ class SpikingNeuralLayer():
         self.spiking = False
         # Neuron variables
         self.v_membrane = np.zeros(shape, dtype=np.int32)
-        self.spikes = np.zeros(shape)
-        self.refactory = np.zeros(shape, dtype=np.int32)
+        self.spikes = np.zeros(shape, dtype=np.int32)
+        self.refractory = np.zeros(shape, dtype=np.int32)
         self.weights = weights
 
         # Simulation parameters
@@ -190,7 +190,7 @@ class SpikingNeuralLayer():
         it returns to the rest voltage after a spike
         """
         self.v_membrane += z
-        self.v_membrane *= (1-self.refactory)
+        self.v_membrane *= (1-self.refractory)
         # Force a saturation point at vth and -vth
         if not self.spiking:
             self.v_membrane = np.where(
@@ -212,8 +212,8 @@ class SpikingNeuralLayer():
         # Generate a spike when the voltage is higher than the threshold
         if self.spiking:
             self.spikes = np.where((self.v_membrane>self.v_threshold), True, False)
-        # Activate the refactory period for the neurons that spike
-        self.refactory += self.spikes
+        # Activate the refractory period for the neurons that spike
+        self.refractory += self.spikes
         return self.spikes
 
     def update_state(self, in_spikes):

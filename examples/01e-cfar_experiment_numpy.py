@@ -25,7 +25,6 @@ sim_times = [
     274, 282, 290, 300, 325, 350,
     375, 400, 425, 450, 475, 500
 ]
-# sim_times = [200]
 
 bin_sizes = [1024]
 
@@ -137,8 +136,8 @@ def run_batch(raw_data, timesteps, cfar_width):
         s_dft_out, fft_out = run(raw_data[i], timesteps, "spike", title, cfar_width, i)
         # Measure accuracy
         acc = sft.utils.metrics.get_accuracy(s_dft_out, fft_out)
-        prec = sft.utils.metrics.get_accuracy(s_dft_out, fft_out)
-        rec = sft.utils.metrics.get_accuracy(s_dft_out, fft_out)
+        prec = sft.utils.metrics.get_precision(s_dft_out, fft_out)
+        rec = sft.utils.metrics.get_recall(s_dft_out, fft_out)
         acc_avg += acc
         prec_avg += prec
         rec_avg += rec
@@ -160,7 +159,7 @@ def run_experiment(raw_data, n_bins, cfar_width):
         step = 4
     elif n_bins == 1024:
         step = 1
-    raw_data = raw_data[:,:,:,:,:,::step]
+    raw_data = raw_data[:,::step]
     # Iterate for different simulation times
     acc = []
     prec = []
@@ -187,22 +186,13 @@ def main(
     elif source=="special_cases":
         raw_data = np.load("data/TI_radar/special_cases/data_tum.npy")
         # reshape to standard data format
-        raw_data = raw_data.reshape((4, 1,1,1,1, 1024))
+        raw_data = raw_data.reshape((4, 1024))
 
     for i, n_bins in enumerate(bin_sizes):
         run_experiment(raw_data, n_bins, cfar_widths[i])
     plt.legend()
     plt.savefig("results/TI_rmse.eps")
     plt.show()
-
-
-        # axs[0].set_title("FFT")
-        # axs[0].plot(fft_data)
-        # axs[1].set_title("S-FT Numpy")
-        # axs[1].plot(s_dft_out)
-        # fig.savefig("results/TI_{}.eps".format(i))
-        # if plot:
-        #     plt.show()
     return
 
 
