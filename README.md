@@ -2,9 +2,7 @@
 
 This library provides code for implementing the Spiking Fourier transform (S-FT) for computing the frequency spectrum of radar signals using a spiking neural network. The neuron model and network architecture was introduced in the following paper:
 
-```
-López-Randulfe, Javier, et al. "Time-coded spiking fourier transform in neuromorphic hardware." IEEE Transactions on Computers 71.11 (2022): 2792-2802.
-```
+> López-Randulfe, Javier, et al. "Time-coded spiking fourier transform in neuromorphic hardware." IEEE Transactions on Computers 71.11 (2022): 2792-2802.
 
 Currently the library provides implementations compatible with Loihi2 and SpiNNaker2 boards, as well as a NumPy version that works on a normal PC.
 
@@ -16,7 +14,7 @@ To prepare the library, download it to a local folder and install it using pip
 pip install -e .
 ```
 
-You also need to download and install the *pyRadarSP* library, please follow the instructions [here](https://gitlab.com/ki-asic/pyradarsp/).
+You also need to download and install the *pyRadarSP* library, please follow the instructions [here](https://github.com/KI-ASIC-TUM/pyRadarSP/).
 
 You can now try and run one of the scripts in the examples folder.
 
