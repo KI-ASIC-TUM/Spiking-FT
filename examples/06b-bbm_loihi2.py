@@ -35,6 +35,23 @@ except ImportError:
     pass
 
 
+plt.rcParams.update({
+    "font.family": "serif",  # use serif/main font for text elements
+    "text.usetex": True,     # use inline math for ticks
+    'axes.unicode_minus': False,
+    # Use 10pt font in plots, to match 10pt font in document
+    "axes.labelsize": 10,
+    "axes.titlesize": 12,
+    "font.size": 10,
+    # Make the legend/label fonts a little smaller
+    "legend.fontsize": 10,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "axes.spines.right": False,
+    "axes.spines.top": False
+    })
+
+
 # Pipeline configuration
 timesteps = 100
 off_bins = 12
@@ -59,7 +76,7 @@ sft_params = {
     "out_type": "spike",
     "off_bins": off_bins,
     "normalize": True,
-    "out_abs": True,
+    "out_abs": False,
     "strict_silent": False
 }
 
@@ -154,11 +171,13 @@ def spectrum_plotter(data, init_chirp, end_chirp, title):
         np_data = np.load(np_path)
         loihi_path = Path("results/loihi/sft_{}_{}.npy".format(title, chirp_n))
         loihi_data = np.load(loihi_path)
+        spinn_path = Path("results/spinnaker/sft_{}_{}.npy".format(title, chirp_n))
+        spinn_data = np.load(spinn_path)
         _, axs = plt.subplots(3)
-        axs[0].plot(std_ft)
-        axs[0].set_title("FFT")
-        axs[1].plot(np_data)
-        axs[1].set_title("NumPy S-FT")
+        axs[0].plot(np_data)
+        axs[0].set_title("NumPy S-FT")
+        axs[1].plot(spinn_data)
+        axs[1].set_title("SpiNNaker S-FT")
         axs[2].plot(loihi_data)
         axs[2].set_title("Loihi S-FT")
         plt.tight_layout()
@@ -171,11 +190,13 @@ def plotter(errors, init_chirp, end_chirp, subdata):
     fig = plt.figure(figsize=(latex_w, latex_h))
     plt.boxplot(
         errors,
-        widths=0.2,
+        widths=0.3,
         showfliers=False
     )
-    plt.xticks([1, 2], ["loihi", "numpy"])
+    plt.xticks([1, 2, 3], ["Loihi 2", "SpiNNaker 2", "NumPy"])
+    plt.ylabel("RMSE")
     plt.savefig("results/platform_comparison_boxplot.eps")
+    plt.savefig("results/platform_comparison_boxplot.pdf", dpi=300)
     plt.show()
     pass
 
