@@ -23,6 +23,8 @@ cd examples
 python 01c-single_chirp_numpy.py
 ```
 
+By default, the example runs the S-FT on a sample 1-D radar chirp. Alternatively, you can try the four chirps used for the S-FT paper by changing the source type from `sample` to `special_cases` in line 110. You can try the different chirps changing the `frame_idx` value in line 117. This index can take values from 0 to 3.
+
 ## Important note
 
 Be aware that for running the examples for loihi2 and SpiNNaker2, you will need connection to the board and Lava or py-spinnaker2 libraries, respectively. These are third party libraries and hardware, we are not in charge of maintaining nor providing access for these resources.
